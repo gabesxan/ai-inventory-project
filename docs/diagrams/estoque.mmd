@@ -1,0 +1,22 @@
+flowchart TB
+    A["01 · CATÁLOGO<br/>Produto · unidade · parâmetros"] --> B["02 · MOVIMENTAÇÃO<br/>Entrada · saída · ajuste · estorno"]
+    B --> C["03 · VALIDAÇÃO<br/>Perfil · quantidade · justificativa"]
+    C --> D["TRANSAÇÃO<br/>Bloquear produto e conferir saldo"]
+    D --> E{"Operação<br/>válida?"}
+    E -- "Não" --> F["RECUSAR<br/>Sem alteração de saldo"]
+    E -- "Sim" --> G["04 · PERSISTÊNCIA<br/>Evento + saldo + ruptura"]
+    G --> H["05 · OPERAÇÃO<br/>Painel · relatórios · CSV"]
+    G --> I["CAMADA ANALÍTICA<br/>Série diária · demanda · disponibilidade"]
+    J["HISTÓRICO CSV<br/>Prévia · validação · deduplicação"] --> I
+    I --> K["06 · CONTRATO DE PREVISÃO<br/>Provedor futuro / simulação identificada"]
+    K --> L["SUGESTÃO DE COMPRA<br/>Decisão humana"]
+    classDef entry fill:#111827,stroke:#111827,color:#FFFFFF,stroke-width:2px;
+    classDef work fill:#EFF6FF,stroke:#2563EB,color:#172554,stroke-width:2px;
+    classDef data fill:#F0FDFA,stroke:#0D9488,color:#134E4A,stroke-width:2px;
+    classDef decision fill:#FFFFFF,stroke:#94A3B8,color:#1E293B;
+    classDef stop fill:#FFF1F2,stroke:#E11D48,color:#881337;
+    class A,L entry;
+    class B,C,D,H work;
+    class G,I,J,K data;
+    class E decision;
+    class F stop;
