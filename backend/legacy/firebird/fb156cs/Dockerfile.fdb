@@ -1,0 +1,6 @@
+FROM fb156cs:local
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+ && apt-get install -y --no-install-recommends python3 python3-pip python3-setuptools ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip3 install --no-cache-dir "fdb==2.0.1" 2>&1 | tail -2 \
+ && python3 -c "import fdb,sys; print('fdb', fdb.__version__, sys.version.split()[0])"
