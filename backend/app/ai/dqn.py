@@ -70,6 +70,7 @@ def train_dqn(
     training: TrainingConfig,
     *,
     passes: int = 1,
+    epsilon_by_step: bool = False,
 ) -> tuple[DQN, int]:
     """Learn from training episodes only and return the number of optimizer updates."""
     if not episodes:
@@ -88,16 +89,24 @@ def train_dqn(
     memory = deque(maxlen=training.replay_capacity)
     ordered_episodes = list(episodes) * passes
     rng.shuffle(ordered_episodes)
+    if epsilon_by_step:
+        exploration_steps = max(1, 0.8 * sum(len(episode.demand) for episode in ordered_episodes))
     updates = 0
     steps = 0
-    LOG.info("CPU DQN seed=%s config=%s episodes=%s", training.seed, asdict(training), len(episodes))
+    LOG.info(
+        "CPU DQN seed=%s config=%s episodes=%s epsilon_schedule=%s",
+        training.seed, asdict(training), len(ordered_episodes), "step" if epsilon_by_step else "episode",
+    )
     for index, episode in enumerate(ordered_episodes):
+        # The episode schedule retains the original one-pass decay window.
         epsilon = max(0.05, 1 - index / max(1, 0.8 * len(episodes)))
         env = episode.environment(inventory)
         terminal = False
         total_cost = 0.0
         while not terminal:
             state = env.observation
+            if epsilon_by_step:
+                epsilon = max(0.05, 1 - steps / exploration_steps)
             action = rng.randrange(inventory.max_order + 1) if rng.random() < epsilon else policy(state)
             day = env.step(action)
             terminal = day.terminal
@@ -124,7 +133,7 @@ def train_dqn(
                 updates += 1
                 if updates % training.target_sync_steps == 0:
                     target.load_state_dict(online.state_dict())
-        if index % 25 == 0 or index + 1 == len(episodes):
+        if index % 25 == 0 or index + 1 == len(ordered_episodes):
             LOG.info("Iteration %s run=%s cost=%.2f updates=%s", index + 1, episode.run_id, total_cost, updates)
     online.eval()
     return policy, updates
@@ -134,6 +143,7 @@ def save_checkpoint(
     path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int,
     *, source: str = "synthetic", scenarios: Sequence[Scenario] = DEMO_SCENARIOS,
     calibration: dict | None = None, training_passes: int = 1,
+    epsilon_by_step: bool = False,
 ) -> dict:
     metadata = {
         "format_version": 1,
@@ -150,6 +160,8 @@ def save_checkpoint(
     }
     if training_passes != 1:
         metadata["training_passes"] = training_passes
+    if epsilon_by_step:
+        metadata["epsilon_schedule"] = "step"
     if calibration is not None:
         metadata["calibration"] = calibration
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,11 +187,17 @@ def load_checkpoint(path: Path) -> tuple[DQN, dict]:
     return DQN(model.eval(), inventory), metadata
 
 
-def train_demo(path: Path, seed: int = 42, *, passes: int = 1) -> tuple[DQN, dict]:
+def train_demo(
+    path: Path, seed: int = 42, *, passes: int = 1, epsilon_by_step: bool = False,
+) -> tuple[DQN, dict]:
     training = TrainingConfig(seed=seed)
     episodes = demo_episodes("train")
-    policy, updates = train_dqn(episodes, DEMO_INVENTORY, training, passes=passes)
-    return policy, save_checkpoint(path, policy, training, episodes, updates, training_passes=passes)
+    policy, updates = train_dqn(
+        episodes, DEMO_INVENTORY, training, passes=passes, epsilon_by_step=epsilon_by_step,
+    )
+    return policy, save_checkpoint(
+        path, policy, training, episodes, updates, training_passes=passes, epsilon_by_step=epsilon_by_step,
+    )
 
 
 if __name__ == "__main__":
@@ -187,6 +205,7 @@ if __name__ == "__main__":
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--passes", type=int, default=1, help="Repeat each synthetic training run this many times")
+    parser.add_argument("--epsilon-by-step", action="store_true", help="Decay epsilon at every environment step")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    train_demo(args.checkpoint, args.seed, passes=args.passes)
+    train_demo(args.checkpoint, args.seed, passes=args.passes, epsilon_by_step=args.epsilon_by_step)
