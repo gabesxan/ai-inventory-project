@@ -17,6 +17,8 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAdmin: boolean;
+  sessionExpired: boolean;
+  clearSessionExpired: () => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -26,14 +28,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [sessionExpired, setSessionExpired] = useState<boolean>(false);
 
-  const clearSession = useCallback(() => {
+  const clearSession = useCallback((expired = false) => {
     setStoredToken(null);
     setUser(null);
+    setSessionExpired(expired);
+  }, []);
+
+  const clearSessionExpired = useCallback(() => {
+    setSessionExpired(false);
   }, []);
 
   useEffect(() => {
-    registerUnauthorizedHandler(clearSession);
+    registerUnauthorizedHandler(() => clearSession(true));
   }, [clearSession]);
 
   useEffect(() => {
@@ -44,8 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     apiRequest<User>("/auth/me")
-      .then((me) => setUser(me))
-      .catch(() => clearSession())
+      .then((me) => {
+        setUser(me);
+        setSessionExpired(false);
+      })
+      .catch(() => clearSession(true))
       .finally(() => setIsLoading(false));
   }, [clearSession]);
 
@@ -56,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     setStoredToken(res.access_token);
     setUser(res.user);
+    setSessionExpired(false);
   }, []);
 
   const logout = useCallback(async () => {
@@ -64,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // mesmo se o token já tiver expirado, limpa a sessão local
     } finally {
-      clearSession();
+      clearSession(false);
     }
   }, [clearSession]);
 
@@ -74,6 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         isAdmin: user?.role === "ADMIN",
+        sessionExpired,
+        clearSessionExpired,
         login,
         logout,
       }}

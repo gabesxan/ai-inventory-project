@@ -3,10 +3,16 @@ const TOKEN_KEY = "inventory_auth_token";
 
 export class ApiError extends Error {
   status: number;
+  fieldErrors: Record<string, string>;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    fieldErrors: Record<string, string> = {}
+  ) {
     super(message);
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -20,6 +26,26 @@ export function setStoredToken(token: string | null): void {
   } else {
     localStorage.removeItem(TOKEN_KEY);
   }
+}
+
+function extractFieldErrors(body: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!body || typeof body !== "object") return result;
+  const record = body as Record<string, unknown>;
+  if (!Array.isArray(record.detail)) return result;
+  for (const item of record.detail) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    const loc = Array.isArray(entry.loc) ? entry.loc : [];
+    const field = loc[loc.length - 1];
+    const msg = typeof entry.msg === "string"
+      ? entry.msg.replace(/^Value error,\s*/i, "")
+      : "";
+    if (typeof field === "string" && msg) {
+      result[field] = msg;
+    }
+  }
+  return result;
 }
 
 function extractErrorMessage(body: unknown, fallback: string): string {
@@ -80,7 +106,7 @@ export async function apiRequest<T>(
       setStoredToken(null);
       if (onUnauthorizedCallback) onUnauthorizedCallback();
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, extractFieldErrors(parsed));
   }
 
   if (response.status === 204) {
