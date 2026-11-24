@@ -36,3 +36,15 @@
   - Quiet light canvas (`#F4F6F8`), tonal panels (`#F8FAFB`), crisp 1 px hairline borders (`#E4E7EC`), controlled deep slate-teal accent (`#0F625B`), and tabular numeric alignment hold across shell, dashboard, and Reposição.
   - Horizontal table scrolling contains wide report tables cleanly on `390 px` without breaking page layout or hiding filters/provenance.
 - **Captured evidence (local, gitignored):** `test-results/fe-02/live-login-1440.png`, `live-dashboard-1440.png`, `live-dashboard-390.png`, `live-replenishment-1440.png`, `live-replenishment-390.png`, `live-comparison-expanded-1440.png`, `live-mobile-drawer-390.png`.
+
+## Integrated API verification (`http://127.0.0.1:8106/api`, backend `a651994`)
+
+- **Command:** `VITE_API_URL=http://127.0.0.1:8106/api bash frontend/scripts/verify-live-reports.sh`
+- **Real Firebird + DQN live results (0 console errors, 0 warnings):**
+  - **Dashboard (`/`):** `6999` active products, `6996` out of stock (no fabricated opening stock), `3` below minimum, `5 ent. / 11 saí.`, `R$ 1.215,40`; priority preview capped to 20 rows so mobile `390x844` stays fast on the full 6,999-SKU catalog.
+  - **FE-11 / FE-12 (`/relatorios?tab=replenishment`):** `DEMO-MOUSE-01`, `3 UN`, `Sugestão gerada por IA`, `Simulação acadêmica`, `24/11/2026`, `dqn-v1 · synthetic_inventory_v1`, 3 synthetic scenarios (54 paired rows) with 18-row expanded baseline details.
+  - **FE-10 (`/relatorios?tab=imported-history`):** 25 live Firebird rows rendered on first page (`fb-cf6383848e73fdde76569d0b`, e.g., `PAO COMUM TIPO FRANCES KG` `123,44 KG`, `Não informado` for null cost).
+  - **FE-13 (`/relatorios?tab=exceptions`):** 25 live rows rendered from the 4,653,680 unknown product-days with explicit `Disponibilidade desconhecida` copy and `Ver histórico` links.
+  - **FE-14 (`/dados-ia`):** Live batch `fb-cf6383848e73fdde76569d0b` (`650376` accepted, `690` rejected with `document_does_not_move_stock: 239`, `receipt_quantity_unavailable: 451`, `609488` available / `4653680` unknown days).
+  - **Real Operator Session (zero `/api/auth/me` mock):** Signed in via real `/api/auth/login` (`integrated-operator.json`), verified live `GET /api/reports/replenishment` → `HTTP 403` (`LIVE_OPERATOR_AUTH_AND_REPLENISHMENT_HTTP:200:403`), and verified browser redirects to `/` for `/relatorios?tab=replenishment` (`hasReportsNav: false`), `/dados-ia`, and `/usuarios`.
+  - **Additional live screenshots (local, gitignored):** `test-results/fe-02/live-imported-history-1440.png`, `live-exceptions-1440.png`, `live-import-quality-1440.png`.
