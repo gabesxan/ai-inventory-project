@@ -2,6 +2,9 @@
 import csv
 import gzip
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from time import monotonic, sleep
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -173,3 +176,42 @@ def test_older_extract_cannot_overwrite_newer_coverage(db, tmp_path):
     assert (r.status, r.failure_reason) == ("failed", "stale_extract")
     assert db.execute("SELECT count(*), max(period_end) FROM legacy_coverage_series").fetchone() == (2, date(2025, 7, 22))
     assert db.execute("SELECT count(*) FROM legacy_coverage_ranges").fetchone()[0] == before
+
+
+def test_concurrent_repeat_keeps_the_first_publication(db, tmp_path, monkeypatch):
+    d, staged = build(tmp_path, "concurrent")
+    entered, release = Event(), Event()
+    load_history = apply_mod._load_history
+
+    def pause_first(*args, **kwargs):
+        if not entered.is_set():
+            entered.set()
+            assert release.wait(timeout=10)
+        return load_history(*args, **kwargs)
+
+    monkeypatch.setattr(apply_mod, "_load_history", pause_first)
+    with connect(db.info.dbname) as initial, connect(db.info.dbname) as repeat:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(apply, initial, d, staged)
+            assert entered.wait(timeout=10)
+            second = pool.submit(apply, repeat, d, staged)
+            deadline = monotonic() + 8
+            try:
+                while monotonic() < deadline:
+                    wait_state = db.execute(
+                        "SELECT wait_event_type FROM pg_stat_activity WHERE pid = %s",
+                        (repeat.info.backend_pid,),
+                    ).fetchone()
+                    db.rollback()
+                    if wait_state == ("Lock",):
+                        break
+                    sleep(0.01)
+                else:
+                    pytest.fail("The second importer never reached the lock")
+            finally:
+                release.set()
+            published, repeated = first.result(timeout=10), second.result(timeout=10)
+    assert (published.status, repeated.status) == ("imported", "already_imported")
+    assert published.batch_id == repeated.batch_id
+    assert db.execute("SELECT accepted_rows, rejected_rows FROM legacy_import_batches").fetchall() == [(4, 2)]
+    assert db.execute("SELECT count(*) FROM legacy_history_events").fetchone() == (4,)

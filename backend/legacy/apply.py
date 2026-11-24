@@ -178,6 +178,11 @@ def apply_extract(conn, extract_dir: Path, staged: StagedInputs, inst: SourceIns
         load_ready(extract_dir)
         with conn.transaction():
             with conn.cursor() as cur:
+                # Serializes both first-time and overlapping imports for this warehouse.
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (f"estoquefacil:legacy-import:{warehouse_key}",),
+                )
                 cur.execute("SELECT status, accepted_rows, rejected_rows, duplicate_rows, rejection_reasons, coverage "
                             "FROM legacy_import_batches WHERE batch_id = %s FOR UPDATE", (batch_id,))
                 row = cur.fetchone()

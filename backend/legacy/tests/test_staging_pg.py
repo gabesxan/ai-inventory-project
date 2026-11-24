@@ -104,9 +104,12 @@ def staged(tmp_path):
     return d, StagedInputs.from_out_dir(out)
 
 
-def test_single_alembic_head_chained_on_v1():
+def test_single_integrated_alembic_head_contains_legacy_staging_and_replenishment():
     script = ScriptDirectory.from_config(Config(str(BACKEND / "alembic.ini")))
-    assert script.get_heads() == ["0002_legacy_staging"]
+    assert script.get_heads() == ["0003_integrated_reports"]
+    assert set(script.get_revision("0003_integrated_reports").down_revision) == {
+        "0002_legacy_staging", "0002_replenishment_runs",
+    }
     assert script.get_revision("0002_legacy_staging").down_revision == "0001_initial_schema"
 
 
@@ -114,10 +117,10 @@ def test_clean_install_creates_staging_tables(newdb):
     name, url = newdb()
     alembic(url, "upgrade", "head")
     with connect(name) as conn:
-        assert NEW_TABLES <= tables(conn)
+        assert NEW_TABLES | {"replenishment_runs", "replenishment_snapshots"} <= tables(conn)
         with conn.cursor() as c:
             c.execute("SELECT version_num FROM alembic_version")
-            assert c.fetchall() == [("0002_legacy_staging",)]
+            assert c.fetchall() == [("0003_integrated_reports",)]
 
 
 def test_upgrade_from_v1_keeps_data_and_downgrade_is_clean(newdb):
