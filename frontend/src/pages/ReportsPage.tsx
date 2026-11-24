@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Download, RotateCcw } from "lucide-react";
 import { Pagination } from "../components/Pagination";
+import { ReplenishmentTabPanel } from "../components/ReplenishmentTabPanel";
 import {
   apiRequest,
   ApiError,
@@ -14,7 +15,6 @@ import type {
   MovementResponsible,
   PaginatedResponse,
   Product,
-  ReplenishmentRow,
   StockMovement,
   VersionedReport,
 } from "../types/api";
@@ -84,11 +84,6 @@ interface ImportedHistoryFilters {
   end_date: string;
 }
 
-interface ReplenishmentFilters {
-  sku: string;
-  warehouse: string;
-}
-
 const DEFAULT_CURRENT_STOCK_FILTERS: CurrentStockFilters = {
   search: "",
   category_id: "",
@@ -115,11 +110,6 @@ const DEFAULT_IMPORTED_HISTORY_FILTERS: ImportedHistoryFilters = {
   event_type: "",
   start_date: "",
   end_date: "",
-};
-
-const DEFAULT_REPLENISHMENT_FILTERS: ReplenishmentFilters = {
-  sku: "",
-  warehouse: "",
 };
 
 function translateImportedEventType(eventType: string): string {
@@ -164,9 +154,6 @@ export function ReportsPage() {
   const [importedFilters, setImportedFilters] = useState<ImportedHistoryFilters>(
     DEFAULT_IMPORTED_HISTORY_FILTERS
   );
-  const [replenishmentFilters, setReplenishmentFilters] = useState<ReplenishmentFilters>(
-    DEFAULT_REPLENISHMENT_FILTERS
-  );
 
   const [pageByTab, setPageByTab] = useState<Record<ReportTab, number>>({
     "current-stock": 1,
@@ -191,8 +178,6 @@ export function ReportsPage() {
   const [movementRows, setMovementRows] = useState<StockMovement[]>([]);
   const [importedReport, setImportedReport] =
     useState<VersionedReport<ImportedHistoryRow> | null>(null);
-  const [replenishmentReport, setReplenishmentReport] =
-    useState<VersionedReport<ReplenishmentRow> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -255,10 +240,7 @@ export function ReportsPage() {
           end_date: importedFilters.end_date || undefined,
         };
       case "replenishment":
-        return {
-          sku: replenishmentFilters.sku.trim() || undefined,
-          warehouse: replenishmentFilters.warehouse.trim() || undefined,
-        };
+        return {};
     }
   }, [
     tab,
@@ -266,7 +248,6 @@ export function ReportsPage() {
     belowMinFilters,
     movementFilters,
     importedFilters,
-    replenishmentFilters,
   ]);
 
   const handleResetActiveFilters = () => {
@@ -285,17 +266,19 @@ export function ReportsPage() {
         setImportedFilters(DEFAULT_IMPORTED_HISTORY_FILTERS);
         break;
       case "replenishment":
-        setReplenishmentFilters(DEFAULT_REPLENISHMENT_FILTERS);
         break;
     }
   };
 
   const loadReport = useCallback(async () => {
+    if (tab === "replenishment") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const pageSize =
-        tab === "imported-history" || tab === "replenishment" ? 25 : 20;
+      const pageSize = tab === "imported-history" ? 25 : 20;
       const qs = buildQueryString({
         ...buildActiveParams(),
         page,
@@ -325,18 +308,10 @@ export function ReportsPage() {
         setImportedReport(res);
         setTotal(res.total);
         setTotalPages(res.total_pages);
-      } else {
-        const res = await apiRequest<VersionedReport<ReplenishmentRow>>(
-          `/reports/replenishment${qs}`
-        );
-        setReplenishmentReport(res);
-        setTotal(res.total);
-        setTotalPages(res.total_pages);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erro ao gerar relatório.");
       if (tab === "imported-history") setImportedReport(null);
-      if (tab === "replenishment") setReplenishmentReport(null);
     } finally {
       setLoading(false);
     }
@@ -431,6 +406,10 @@ export function ReportsPage() {
         aria-labelledby={`report-tab-${tab}`}
         className="card"
       >
+        {tab === "replenishment" ? (
+          <ReplenishmentTabPanel />
+        ) : (
+          <>
         <div className="filters-bar">
           {tab === "current-stock" ? (
             <>
@@ -732,45 +711,6 @@ export function ReportsPage() {
             </>
           ) : null}
 
-          {tab === "replenishment" ? (
-            <>
-              <div className="form-field" style={{ flex: "1 1 200px" }}>
-                <label htmlFor="rep-repl-sku">SKU</label>
-                <input
-                  id="rep-repl-sku"
-                  type="search"
-                  className="input"
-                  value={replenishmentFilters.sku}
-                  onChange={(e) => {
-                    setReplenishmentFilters((prev) => ({
-                      ...prev,
-                      sku: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                  placeholder="Filtrar por SKU..."
-                />
-              </div>
-              <div className="form-field" style={{ minWidth: 150 }}>
-                <label htmlFor="rep-repl-wh">Depósito</label>
-                <input
-                  id="rep-repl-wh"
-                  type="text"
-                  className="input"
-                  value={replenishmentFilters.warehouse}
-                  onChange={(e) => {
-                    setReplenishmentFilters((prev) => ({
-                      ...prev,
-                      warehouse: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                  placeholder="Ex: 1"
-                />
-              </div>
-            </>
-          ) : null}
-
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -973,63 +913,7 @@ export function ReportsPage() {
               />
             </>
           )
-        ) : !replenishmentReport || replenishmentReport.items.length === 0 ? (
-          <div className="state-box">
-            <h3>
-              {replenishmentReport?.status === "calculating"
-                ? "Atualizando dados"
-                : replenishmentReport?.status === "insufficient_data"
-                ? "Dados insuficientes"
-                : "Nenhuma sugestão disponível"}
-            </h3>
-            <p>
-              {replenishmentReport?.status_message ||
-                "Nenhuma sugestão de reposição armazenada para os filtros informados."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>SKU / Produto</th>
-                    <th>Depósito</th>
-                    <th className="td-numeric">Quantidade sugerida</th>
-                    <th>Data de referência</th>
-                    <th>Origem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {replenishmentReport.items.map((row) => (
-                    <tr key={`${row.model_run_id}-${row.sku}-${row.warehouse}`}>
-                      <td>
-                        <div className="mono">{row.sku}</div>
-                        <strong>{row.product_name}</strong>
-                      </td>
-                      <td className="mono">{row.warehouse}</td>
-                      <td className="td-numeric">
-                        <strong>
-                          {formatQuantity(row.recommended_quantity, row.unit)} {row.unit}
-                        </strong>
-                      </td>
-                      <td>{formatDateBR(row.reference_date)}</td>
-                      <td>
-                        {row.source === "synthetic"
-                          ? "Simulação acadêmica"
-                          : "Histórico legado calibrado"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              totalItems={total}
-              onPageChange={setPage}
-            />
+        ) : null}
           </>
         )}
       </section>
