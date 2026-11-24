@@ -2,7 +2,7 @@
 
 **Status:**
 - Both acceptance criteria pass on a **FIXTURE** imported into an isolated, disposable PostgreSQL.
-- **The real opening stock is unavailable.** The snapshot holds no verified physical balance, so no real opening entry was created. A decision is needed (see the end).
+- **The real opening stock is unavailable.** The snapshot holds no verified physical balance, so no real opening entry was created. Gabriel decided on 2026-11-24: **no opening stock** (see the end).
 
 **Verified on:** 2026-11-23 · branch `feat/db-firebird` · input: DB-04 extract `run-a`; products from DB-05
 
@@ -55,12 +55,12 @@ The fixture snapshot has 10 UN, a counted 0 and an unknown SKU.
 - A snapshot counted on **2019-03-31** is stored with `source_date = 2019-03-31` on the snapshot and on every entry.
 - The movement note says "Saldo inicial legado em 2019-03-31", not the import date.
 
-## Decision needed (Gabriel)
+## Decision (Gabriel, 2026-11-24): no opening stock
 
-The real opening stock can't be established from this snapshot. Options:
+The real opening stock can't be established from this snapshot. Gabriel chose **no opening stock** over providing a physical count or accepting the unverified book balance `ESTOQUE_ATUAL`.
 
-1. **Provide a physical count** (a `CAD_BALANCO` export or a dated spreadsheet) for the demonstration warehouse. It would import through the path above.
-2. **Accept the book balance `ESTOQUE_ATUAL`** as an *unverified* opening dated 2026-11-18. Only for the 4,395 positive balances, with the 2,494 negative ones left out. DB-12 would then have to mark availability as book-based.
-3. **No opening stock.** DB-12 publishes demand and receipts only, and availability stays unknown. Nothing has to be invented.
-
-Until one of these is chosen, DB-12 treats stock availability as **unknown** rather than zero.
+- The legacy import creates **no** opening entries and **no** `SALDO_INICIAL` movements for the demonstration warehouse.
+- `ESTOQUE_ATUAL` is **not** imported as stock, not even the positive balances. It stays in the discrepancy report only.
+- DB-12 publishes demand and receipts only. Stock availability stays **unknown**, never zero, and zero-sale days stay `zero_unknown_availability`.
+- The import path above stays in place. If a dated physical count (`CAD_BALANCO` export or spreadsheet) is supplied later, it imports through it with its actual count date.
+- Rejected options: book balance as an unverified opening dated 2026-11-18 (it isn't a count, has no stored date, and 2,494 balances are negative).

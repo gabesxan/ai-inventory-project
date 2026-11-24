@@ -70,5 +70,5 @@ The files are:
 ## For IA-07 / API-04 (other workstreams)
 
 - Real uncensored history = sale days only.
-- Calibration should treat `zero_unknown_availability` as censored, or wait for a dated opening count (DB-10 decision).
+- Calibration should treat `zero_unknown_availability` as censored. Gabriel decided on 2026-11-24 that there is no opening stock (DB-10), so this stays the rule unless a dated physical count is supplied later.
 - The quantities are base units (DB-05), with the unit given per series.
