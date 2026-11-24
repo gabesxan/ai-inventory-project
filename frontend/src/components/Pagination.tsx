@@ -13,9 +13,11 @@ export function Pagination({
   totalItems,
   onPageChange,
 }: PaginationProps) {
+  const safeTotalPages = Math.max(1, totalPages);
+
   return (
-    <div className="pagination-bar">
-      <span>
+    <nav className="pagination-bar" aria-label="Paginação de registros">
+      <span className="pagination-summary tabular-nums">
         Total de registros: <strong>{totalItems}</strong>
       </span>
       <div className="pagination-controls">
@@ -25,22 +27,22 @@ export function Pagination({
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={15} aria-hidden="true" />
           <span>Anterior</span>
         </button>
-        <span>
-          Página <strong>{page}</strong> de <strong>{Math.max(1, totalPages)}</strong>
+        <span className="pagination-indicator tabular-nums">
+          Página <strong>{page}</strong> de <strong>{safeTotalPages}</strong>
         </span>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          disabled={page >= totalPages}
+          disabled={page >= safeTotalPages}
           onClick={() => onPageChange(page + 1)}
         >
           <span>Próxima</span>
-          <ChevronRight size={16} />
+          <ChevronRight size={15} aria-hidden="true" />
         </button>
       </div>
-    </div>
+    </nav>
   );
 }
