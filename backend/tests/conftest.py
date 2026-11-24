@@ -52,6 +52,9 @@ def clean_database() -> Generator[None, None, None]:
             text(
                 """
                 TRUNCATE TABLE
+                    replenishment_states,
+                    replenishment_snapshots,
+                    replenishment_runs,
                     historical_movements,
                     historical_import_batches,
                     stockout_periods,
