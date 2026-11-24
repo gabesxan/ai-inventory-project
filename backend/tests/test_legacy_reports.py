@@ -34,6 +34,7 @@ def legacy_report_data(db_session):
     db_session.commit()
     yield product.id
     db_session.execute(text("DELETE FROM legacy_coverage_ranges WHERE batch_id = 'report-test-batch'"))
+    db_session.execute(text("DELETE FROM legacy_coverage_series WHERE batch_id = 'report-test-batch'"))
     db_session.execute(text("DELETE FROM legacy_history_events WHERE batch_id = 'report-test-batch'"))
     db_session.execute(text("DELETE FROM legacy_import_batches WHERE batch_id = 'report-test-batch'"))
     db_session.commit()

@@ -2,20 +2,30 @@
 
 import argparse
 import json
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.ai.baselines import fit_baselines
 from app.ai.dqn import DQN, load_checkpoint
-from app.ai.scenarios import TEST_SEEDS, VALIDATION_SEEDS, Scenario
+from app.ai.scenarios import TEST_SEEDS, VALIDATION_SEEDS, Episode, Scenario
 from app.ai.simulator import replay
 
 
 def evaluate(policy: DQN, metadata: dict, revision: str) -> dict:
+    if metadata["source"] != "synthetic":
+        raise ValueError("Legacy-calibrated evaluation requires the original chronological test period")
     scenarios = tuple(Scenario(**config) for config in metadata["scenarios"])
     validation = tuple(scenario.realize(seed) for seed in VALIDATION_SEEDS for scenario in scenarios)
     held_out = tuple(scenario.realize(seed) for seed in TEST_SEEDS for scenario in scenarios)
+    return evaluate_episodes(policy, metadata, revision, validation, held_out)
+
+
+def evaluate_episodes(
+    policy: DQN, metadata: dict, revision: str, validation: Sequence[Episode], held_out: Sequence[Episode],
+) -> dict:
+    """Evaluate each frozen policy on the same realized days and ordering delays."""
     training_ids = set(metadata["training_runs"])
     if training_ids.intersection(episode.run_id for episode in (*validation, *held_out)):
         raise ValueError("Evaluation episodes overlap with the checkpoint's training set")

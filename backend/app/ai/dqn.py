@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from app.ai.scenarios import DEMO_INVENTORY, DEMO_SCENARIOS, Episode, demo_episodes
+from app.ai.scenarios import DEMO_INVENTORY, DEMO_SCENARIOS, Episode, Scenario, demo_episodes
 from app.ai.simulator import InventoryConfig, Observation
 
 
@@ -127,21 +127,25 @@ def train_dqn(
 
 
 def save_checkpoint(
-    path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int
+    path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int,
+    *, source: str = "synthetic", scenarios: Sequence[Scenario] = DEMO_SCENARIOS,
+    calibration: dict | None = None,
 ) -> dict:
     metadata = {
         "format_version": 1,
         "model_version": MODEL_VERSION,
-        "source": "synthetic",
+        "source": source,
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "inventory": asdict(policy.inventory),
         "training": asdict(training),
-        "scenarios": [asdict(scenario) for scenario in DEMO_SCENARIOS],
+        "scenarios": [asdict(scenario) for scenario in scenarios],
         "training_runs": [episode.run_id for episode in episodes],
         "updates": updates,
         "torch_version": str(torch.__version__),
         "numpy_version": str(np.__version__),
     }
+    if calibration is not None:
+        metadata["calibration"] = calibration
     path.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=path.parent, delete=False) as stream:
         pending = Path(stream.name)
