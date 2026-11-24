@@ -11,9 +11,9 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.catalog import PaginatedResponse, ProductOut
 from app.schemas.inventory import MovementOut
-from app.schemas.reports import ReplenishmentRow, VersionedReport
+from app.schemas.reports import ComparisonRow, ModelSource, ReplenishmentRow, VersionedReport
 from app.services.inventory_service import list_movements
-from app.services.replenishment_reports import stored_replenishment
+from app.services.replenishment_reports import stored_comparison, stored_replenishment
 from app.services.report_service import (
     export_below_minimum_csv,
     export_current_stock_csv,
@@ -21,6 +21,7 @@ from app.services.report_service import (
     get_below_minimum_report,
     get_current_stock_report,
 )
+from app.services.versioned_reports import report_csv, report_page
 
 
 router = APIRouter(prefix="/reports", tags=["Relatórios"])
@@ -37,6 +38,24 @@ def report_replenishment(
 ) -> VersionedReport[ReplenishmentRow]:
     """Lê as sugestões persistidas pelo processo de reposição."""
     return stored_replenishment(db, sku, warehouse, page, page_size)
+
+
+@router.get("/comparison", response_model=VersionedReport[ComparisonRow])
+def report_comparison(
+    _admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    source: ModelSource | None = Query(default=None),
+    model_run_id: str | None = Query(default=None, min_length=1, max_length=36),
+    scenario: str | None = Query(default=None, min_length=1, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    export: Literal["json", "csv"] = Query(default="json"),
+):
+    """Compara resultados persistidos e exporta o mesmo recorte."""
+    rows = stored_comparison(db, source, model_run_id, scenario)
+    if export == "csv":
+        return report_csv(ComparisonRow, rows, "relatorio_comparacao.csv")
+    return report_page(ComparisonRow, rows, page, page_size)
 
 
 @router.get("/current-stock")

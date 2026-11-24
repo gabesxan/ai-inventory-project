@@ -1,10 +1,10 @@
 """Version 1 wire contracts for inventory reports and legacy import evidence."""
 
-from datetime import date
+from datetime import date, timezone
 from decimal import Decimal
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AfterValidator, AwareDatetime, BaseModel, Field
 
 from app.schemas.catalog import PaginatedResponse
 
@@ -14,6 +14,7 @@ ModelSource = Literal["synthetic", "legacy_calibrated"]
 Coverage = Literal["available", "stockout", "unknown", "uncovered"]
 Quantity = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)]
 Count = Annotated[int, Field(ge=0)]
+UtcDatetime = Annotated[AwareDatetime, AfterValidator(lambda value: value.astimezone(timezone.utc))]
 T = TypeVar("T")
 
 
@@ -29,8 +30,8 @@ class ModelProvenance(BaseModel):
     scenario: str
     source: ModelSource
     reference_date: date
-    trained_at: AwareDatetime
-    generated_at: AwareDatetime
+    trained_at: UtcDatetime
+    generated_at: UtcDatetime
 
 
 class ReplenishmentRow(ModelProvenance):
@@ -94,7 +95,7 @@ class ImportQualityRow(BaseModel):
     period_start: date | None
     period_end: date | None
     status: Literal["imported", "failed"]
-    imported_at: AwareDatetime | None
+    imported_at: UtcDatetime | None
     accepted_rows: Count
     rejected_rows: Count
     duplicate_rows: Count

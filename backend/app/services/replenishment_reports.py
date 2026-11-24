@@ -1,13 +1,14 @@
 """Read stored suggestions independently of training and inference."""
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Product
-from app.models.replenishment import ReplenishmentSnapshot, ReplenishmentState
-from app.schemas.reports import ReplenishmentRow, ReportStatus, VersionedReport
+from app.models.replenishment import ReplenishmentRun, ReplenishmentSnapshot, ReplenishmentState
+from app.schemas.reports import ComparisonRow, ModelSource, ReplenishmentRow, ReportStatus, VersionedReport
 
 
 def stored_replenishment(
@@ -55,3 +56,30 @@ def stored_replenishment(
         status=status, status_message=message, items=stored[offset:offset + page_size],
         total=total, page=page, page_size=page_size, total_pages=max(1, (total + page_size - 1) // page_size),
     )
+
+
+def stored_comparison(
+    db: Session, source: ModelSource | None, model_run_id: str | None, scenario: str | None,
+) -> list[ComparisonRow]:
+    query = select(ReplenishmentRun)
+    if model_run_id is not None:
+        query = query.where(ReplenishmentRun.id == model_run_id)
+    if source is not None:
+        query = query.where(ReplenishmentRun.source == source)
+
+    rows = []
+    for run in db.scalars(query.order_by(ReplenishmentRun.id)):
+        metrics = run.evaluation.get("metrics", [])
+        if not metrics:
+            continue
+        generated_at = datetime.fromisoformat(run.evaluation["evaluated_at"])
+        reference_date = generated_at.astimezone(ZoneInfo("America/Sao_Paulo")).date()
+        for metric in metrics:
+            if scenario is None or metric["scenario"] == scenario:
+                rows.append(ComparisonRow(
+                    model_run_id=run.id, model_version=run.model_version, source=run.source,
+                    reference_date=reference_date, trained_at=run.trained_at, generated_at=generated_at,
+                    **metric,
+                ))
+    rows.sort(key=lambda row: (row.model_run_id, row.scenario, row.seed, row.policy))
+    return rows

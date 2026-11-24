@@ -20,7 +20,7 @@ from app.services.units import quantize_money
 SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 
-def _build_csv_bytes(headers: list[str], rows: list[list[object]]) -> bytes:
+def build_csv_bytes(headers: list[str], rows: list[list[object]]) -> bytes:
     """Gera CSV UTF-8 com BOM para compatibilidade direta com Excel e Python."""
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=",", quoting=csv.QUOTE_MINIMAL)
@@ -106,7 +106,7 @@ def export_current_stock_csv(
                 "Sim" if item.is_active else "Nao",
             ]
         )
-    return _build_csv_bytes(headers, rows)
+    return build_csv_bytes(headers, rows)
 
 
 def get_below_minimum_report(
@@ -174,7 +174,7 @@ def export_below_minimum_csv(
                 "Sem estoque" if item.current_stock <= 0 else "Abaixo do minimo",
             ]
         )
-    return _build_csv_bytes(headers, rows)
+    return build_csv_bytes(headers, rows)
 
 
 def export_movements_csv(
@@ -291,4 +291,4 @@ def export_movements_csv(
                 "Sim" if mv.is_synthetic else "Nao",
             ]
         )
-    return _build_csv_bytes(headers, csv_rows)
+    return build_csv_bytes(headers, csv_rows)
