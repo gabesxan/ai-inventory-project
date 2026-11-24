@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   Upload,
 } from "lucide-react";
+import { LegacyImportQualityPanel } from "../components/LegacyImportQualityPanel";
 import {
   apiRequest,
   ApiError,
@@ -115,9 +116,9 @@ export function AiDataPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Dados Históricos e Exportação para IA</h1>
+          <h1>Importação e Dados Históricos</h1>
           <p className="page-subtitle">
-            Importe histórico por CSV para estudo (sem alterar saldos reais) e exporte bases tratadas para Python/pandas.
+            Acompanhe a qualidade de extratos legados, importe histórico por CSV (sem alterar saldos reais) e exporte bases tratadas.
           </p>
         </div>
         <div className="header-actions">
@@ -149,6 +150,8 @@ export function AiDataPage() {
           {error}
         </div>
       ) : null}
+
+      <LegacyImportQualityPanel />
 
       <div className="split-grid" style={{ marginBottom: 18 }}>
         <div className="card">

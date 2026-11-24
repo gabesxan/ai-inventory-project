@@ -1034,6 +1034,12 @@ table.data-table th.td-numeric,
   color: var(--ink-primary);
 }
 
+.reason-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* Comparação de políticas (FE-12) */
 .comparison-section {
   margin-top: var(--space-6);
