@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Boxes, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
+import { BrandMark } from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../services/api";
 
@@ -51,10 +52,10 @@ export function LoginPage() {
       <div className="login-card">
         <div className="login-brand">
           <div className="login-brand-icon">
-            <Boxes size={24} />
+            <BrandMark size={28} />
           </div>
           <div>
-            <h1>EstoqueFácil IA</h1>
+            <h1>EstoqueFácil</h1>
             <p>Acesse o sistema de gestão de estoque</p>
           </div>
         </div>

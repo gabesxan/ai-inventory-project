@@ -73,14 +73,14 @@ export function ConfirmModal({
             onClick={handleConfirm}
             disabled={isSubmitting}
           >
-            <Check size={16} />
+            <Check size={15} />
             <span>{isSubmitting ? "Processando..." : confirmLabel}</span>
           </button>
         </>
       }
     >
       <div className="alert alert-warning" style={{ marginBottom: 14 }}>
-        <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+        <AlertTriangle size={18} className="alert-icon" aria-hidden="true" />
         <div>{description}</div>
       </div>
 
@@ -96,6 +96,7 @@ export function ConfirmModal({
           <textarea
             id="confirm-reason-input"
             className={`textarea ${localError ? "has-error" : ""}`}
+            aria-invalid={Boolean(localError)}
             placeholder={reasonPlaceholder}
             value={reason}
             onChange={(e) => {
@@ -104,7 +105,11 @@ export function ConfirmModal({
             }}
             rows={3}
           />
-          {localError ? <span className="field-error">{localError}</span> : null}
+          {localError ? (
+            <span className="field-error" role="alert">
+              {localError}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </Modal>
