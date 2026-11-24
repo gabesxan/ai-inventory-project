@@ -68,10 +68,14 @@ def train_dqn(
     episodes: Sequence[Episode],
     inventory: InventoryConfig,
     training: TrainingConfig,
+    *,
+    passes: int = 1,
 ) -> tuple[DQN, int]:
     """Learn from training episodes only and return the number of optimizer updates."""
     if not episodes:
         raise ValueError("At least one training episode is required")
+    if passes < 1:
+        raise ValueError("At least one training pass is required")
     torch.set_num_threads(1)
     torch.manual_seed(training.seed)
     rng = random.Random(training.seed)
@@ -82,7 +86,7 @@ def train_dqn(
     policy = DQN(online, inventory)
     optimizer = torch.optim.Adam(online.parameters(), lr=training.learning_rate)
     memory = deque(maxlen=training.replay_capacity)
-    ordered_episodes = list(episodes)
+    ordered_episodes = list(episodes) * passes
     rng.shuffle(ordered_episodes)
     updates = 0
     steps = 0
@@ -129,7 +133,7 @@ def train_dqn(
 def save_checkpoint(
     path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int,
     *, source: str = "synthetic", scenarios: Sequence[Scenario] = DEMO_SCENARIOS,
-    calibration: dict | None = None,
+    calibration: dict | None = None, training_passes: int = 1,
 ) -> dict:
     metadata = {
         "format_version": 1,
@@ -144,6 +148,8 @@ def save_checkpoint(
         "torch_version": str(torch.__version__),
         "numpy_version": str(np.__version__),
     }
+    if training_passes != 1:
+        metadata["training_passes"] = training_passes
     if calibration is not None:
         metadata["calibration"] = calibration
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,17 +175,18 @@ def load_checkpoint(path: Path) -> tuple[DQN, dict]:
     return DQN(model.eval(), inventory), metadata
 
 
-def train_demo(path: Path, seed: int = 42) -> tuple[DQN, dict]:
+def train_demo(path: Path, seed: int = 42, *, passes: int = 1) -> tuple[DQN, dict]:
     training = TrainingConfig(seed=seed)
     episodes = demo_episodes("train")
-    policy, updates = train_dqn(episodes, DEMO_INVENTORY, training)
-    return policy, save_checkpoint(path, policy, training, episodes, updates)
+    policy, updates = train_dqn(episodes, DEMO_INVENTORY, training, passes=passes)
+    return policy, save_checkpoint(path, policy, training, episodes, updates, training_passes=passes)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a CPU DQN on synthetic inventory scenarios.")
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--passes", type=int, default=1, help="Repeat each synthetic training run this many times")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    train_demo(args.checkpoint, args.seed)
+    train_demo(args.checkpoint, args.seed, passes=args.passes)
