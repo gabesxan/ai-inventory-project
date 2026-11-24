@@ -1,6 +1,7 @@
 """Daily lost-sales inventory environment with a positive replenishment delay."""
 
 import math
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 
@@ -107,3 +108,14 @@ class InventoryEnvironment:
             next_observation=self.observation,
             terminal=terminal,
         )
+
+
+def replay(
+    environment: InventoryEnvironment, policy: Callable[[Observation], int]
+) -> Iterator[DayResult]:
+    """Run a policy using only the current observation at each decision."""
+    while True:
+        result = environment.step(policy(environment.observation))
+        yield result
+        if result.terminal:
+            return
