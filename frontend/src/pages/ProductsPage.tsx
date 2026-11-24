@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
 } from "lucide-react";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -264,9 +265,23 @@ export function ProductsPage() {
       setFormOpen(false);
       await loadProducts();
     } catch (err) {
-      setFormSubmitError(
-        err instanceof ApiError ? err.message : "Erro ao salvar produto."
-      );
+      if (err instanceof ApiError) {
+        const mapped: Record<string, string> = { ...err.fieldErrors };
+        const lower = err.message.toLowerCase();
+        if (Object.keys(mapped).length === 0) {
+          if (lower.includes("sku")) mapped.sku = err.message;
+          else if (lower.includes("barras") || lower.includes("barcode"))
+            mapped.barcode = err.message;
+          else if (lower.includes("categoria")) mapped.category_id = err.message;
+          else if (lower.includes("unidade")) mapped.unit = err.message;
+        }
+        if (Object.keys(mapped).length > 0) {
+          setFormErrors((prev) => ({ ...prev, ...mapped }));
+        }
+        setFormSubmitError(err.message);
+      } else {
+        setFormSubmitError("Erro ao salvar produto.");
+      }
     } finally {
       setSavingProduct(false);
     }
@@ -407,26 +422,49 @@ export function ProductsPage() {
               <option value="">Todos</option>
             </select>
           </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setSearch("");
+              setCategoryFilter("");
+              setStockFilter("");
+              setStatusFilter("true");
+              setPage(1);
+            }}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            <span>Limpar filtros</span>
+          </button>
         </div>
 
         {loading ? (
           <div className="state-box">Carregando produtos...</div>
         ) : products.length === 0 ? (
           <div className="state-box">
-            <Search size={28} />
+            <Search size={28} aria-hidden="true" />
             <p>Nenhum produto encontrado para os filtros aplicados.</p>
           </div>
         ) : (
           <>
-            <div className="table-wrap">
+            <div className="table-scroll-hint" aria-hidden="true">
+              Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+            </div>
+            <div
+              className="table-wrap"
+              role="region"
+              aria-label="Tabela de produtos e saldos"
+              tabIndex={0}
+            >
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>SKU / Cód. Barras</th>
                     <th>Produto / Categoria</th>
-                    <th>Saldo Atual</th>
-                    <th>Mínimo</th>
-                    <th>Custo Ref.</th>
+                    <th className="td-numeric">Saldo Atual</th>
+                    <th className="td-numeric">Mínimo</th>
+                    <th className="td-numeric">Custo Ref.</th>
                     <th>Localização</th>
                     <th>Status</th>
                     <th>Ações</th>
@@ -625,11 +663,17 @@ export function ProductsPage() {
             <input
               id="pf-barcode"
               type="text"
-              className="input mono"
+              className={`input mono ${formErrors.barcode ? "has-error" : ""}`}
+              aria-invalid={Boolean(formErrors.barcode)}
               value={formState.barcode}
               onChange={(e) => setFormState({ ...formState, barcode: e.target.value })}
               placeholder="Ex: 7891234567890"
             />
+            {formErrors.barcode ? (
+              <span className="field-error" role="alert">
+                {formErrors.barcode}
+              </span>
+            ) : null}
           </div>
 
           <div className="form-field">
@@ -707,7 +751,7 @@ export function ProductsPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="pf-safety">Estoque de Segurança (para IA)</label>
+            <label htmlFor="pf-safety">Estoque de Segurança</label>
             <input
               id="pf-safety"
               type="number"
