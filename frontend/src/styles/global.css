@@ -1462,6 +1462,23 @@ table.data-table th.td-numeric,
   font-size: var(--text-sm);
 }
 
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap .input {
+  padding-right: 40px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .split-grid {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
