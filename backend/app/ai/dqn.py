@@ -71,12 +71,17 @@ def train_dqn(
     *,
     passes: int = 1,
     epsilon_by_step: bool = False,
+    epsilon_decay_fraction: float = 0.8,
 ) -> tuple[DQN, int]:
     """Learn from training episodes only and return the number of optimizer updates."""
     if not episodes:
         raise ValueError("At least one training episode is required")
     if passes < 1:
         raise ValueError("At least one training pass is required")
+    if not 0 < epsilon_decay_fraction <= 1:
+        raise ValueError("Epsilon decay fraction must be in (0, 1]")
+    if not epsilon_by_step and epsilon_decay_fraction != 0.8:
+        raise ValueError("A custom epsilon decay fraction requires per-step decay")
     torch.set_num_threads(1)
     torch.manual_seed(training.seed)
     rng = random.Random(training.seed)
@@ -90,7 +95,7 @@ def train_dqn(
     ordered_episodes = list(episodes) * passes
     rng.shuffle(ordered_episodes)
     if epsilon_by_step:
-        exploration_steps = max(1, 0.8 * sum(len(episode.demand) for episode in ordered_episodes))
+        exploration_steps = max(1, epsilon_decay_fraction * sum(len(episode.demand) for episode in ordered_episodes))
     updates = 0
     steps = 0
     LOG.info(
@@ -143,7 +148,7 @@ def save_checkpoint(
     path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int,
     *, source: str = "synthetic", scenarios: Sequence[Scenario] = DEMO_SCENARIOS,
     calibration: dict | None = None, training_passes: int = 1,
-    epsilon_by_step: bool = False,
+    epsilon_by_step: bool = False, epsilon_decay_fraction: float = 0.8,
 ) -> dict:
     metadata = {
         "format_version": 1,
@@ -162,6 +167,8 @@ def save_checkpoint(
         metadata["training_passes"] = training_passes
     if epsilon_by_step:
         metadata["epsilon_schedule"] = "step"
+    if epsilon_decay_fraction != 0.8:
+        metadata["epsilon_decay_fraction"] = epsilon_decay_fraction
     if calibration is not None:
         metadata["calibration"] = calibration
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,14 +196,17 @@ def load_checkpoint(path: Path) -> tuple[DQN, dict]:
 
 def train_demo(
     path: Path, seed: int = 42, *, passes: int = 1, epsilon_by_step: bool = False,
+    epsilon_decay_fraction: float = 0.8,
 ) -> tuple[DQN, dict]:
     training = TrainingConfig(seed=seed)
     episodes = demo_episodes("train")
     policy, updates = train_dqn(
         episodes, DEMO_INVENTORY, training, passes=passes, epsilon_by_step=epsilon_by_step,
+        epsilon_decay_fraction=epsilon_decay_fraction,
     )
     return policy, save_checkpoint(
         path, policy, training, episodes, updates, training_passes=passes, epsilon_by_step=epsilon_by_step,
+        epsilon_decay_fraction=epsilon_decay_fraction,
     )
 
 
@@ -206,6 +216,13 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--passes", type=int, default=1, help="Repeat each synthetic training run this many times")
     parser.add_argument("--epsilon-by-step", action="store_true", help="Decay epsilon at every environment step")
+    parser.add_argument(
+        "--epsilon-decay-fraction", type=float, default=0.8,
+        help="Fraction of total steps for the per-step decay (default: 0.8)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    train_demo(args.checkpoint, args.seed, passes=args.passes, epsilon_by_step=args.epsilon_by_step)
+    train_demo(
+        args.checkpoint, args.seed, passes=args.passes, epsilon_by_step=args.epsilon_by_step,
+        epsilon_decay_fraction=args.epsilon_decay_fraction,
+    )
