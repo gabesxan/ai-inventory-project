@@ -264,3 +264,123 @@ export interface PurchaseSuggestionsResponse {
   };
   items: PurchaseSuggestionItem[];
 }
+
+/* API-01: Version 1 report and provenance contracts */
+export type ReportStatus =
+  | "ready"
+  | "calculating"
+  | "insufficient_data"
+  | "stale"
+  | "empty";
+
+export type ModelSource = "synthetic" | "legacy_calibrated";
+
+export type CoverageStatus =
+  | "available"
+  | "stockout"
+  | "unknown"
+  | "uncovered";
+
+export interface VersionedReport<T> extends PaginatedResponse<T> {
+  schema_version: 1;
+  status: ReportStatus;
+  status_message: string | null;
+}
+
+export interface ModelProvenance {
+  model_run_id: string;
+  model_version: string;
+  scenario: string;
+  source: ModelSource;
+  reference_date: string;
+  trained_at: string;
+  generated_at: string;
+}
+
+export interface ReplenishmentRow extends ModelProvenance {
+  sku: string;
+  product_name: string;
+  warehouse: string;
+  recommended_quantity: string;
+  unit: string;
+  policy: "dqn";
+}
+
+export interface ComparisonRow extends ModelProvenance {
+  policy: "dqn" | "base_stock" | "s_s";
+  seed: number;
+  total_cost: string | null;
+  fill_rate: string | null;
+  stockout_days: number | null;
+  mean_inventory: string | null;
+  order_days: number | null;
+}
+
+export interface ImportedHistoryRow {
+  record_id: string;
+  sku: string;
+  product_name: string;
+  warehouse: string;
+  event_date: string;
+  event_type: string;
+  quantity: string;
+  unit: string;
+  unit_cost: string | null;
+  stock_availability: CoverageStatus;
+  source: "firebird";
+  batch_id: string;
+  source_date: string | null;
+}
+
+export interface InventoryExceptionRow {
+  sku: string;
+  warehouse: string;
+  reference_date: string;
+  coverage: "stockout" | "unknown" | "uncovered";
+  reason: string;
+  source: "firebird";
+  batch_id: string;
+  source_date: string | null;
+}
+
+export interface CoverageCounts {
+  available_days: number;
+  stockout_days: number;
+  unknown_days: number;
+  uncovered_days: number;
+}
+
+export interface ImportQualityRow {
+  batch_id: string;
+  source: "firebird";
+  warehouse: string;
+  source_date: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  status: "imported" | "failed";
+  imported_at: string | null;
+  accepted_rows: number;
+  rejected_rows: number;
+  duplicate_rows: number;
+  rejection_reasons: Record<string, number>;
+  coverage: CoverageCounts | null;
+}
+
+export interface LegacyPreviewDiagnostic {
+  dataset: string;
+  line_number: number | null;
+  reason: string;
+}
+
+export interface LegacyImportPreview {
+  schema_version: 1;
+  status: "ready" | "invalid";
+  source: "firebird";
+  warehouse: string;
+  source_date: string | null;
+  total_rows: number;
+  valid_rows: number;
+  rejected_rows: number;
+  duplicate_rows: number;
+  diagnostics: LegacyPreviewDiagnostic[];
+}

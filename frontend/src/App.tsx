@@ -8,7 +8,6 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MovementsPage } from "./pages/MovementsPage";
 import { ProductsPage } from "./pages/ProductsPage";
-import { PurchaseSuggestionsPage } from "./pages/PurchaseSuggestionsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { UsersPage } from "./pages/UsersPage";
 
@@ -70,7 +69,7 @@ export function App() {
               path="/sugestoes-compra"
               element={
                 <AdminRoute>
-                  <PurchaseSuggestionsPage />
+                  <Navigate to="/relatorios?tab=replenishment" replace />
                 </AdminRoute>
               }
             />
