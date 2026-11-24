@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Download, RotateCcw } from "lucide-react";
+import { ImportedHistoryTabPanel } from "../components/ImportedHistoryTabPanel";
 import { Pagination } from "../components/Pagination";
 import { ReplenishmentTabPanel } from "../components/ReplenishmentTabPanel";
 import {
@@ -11,16 +12,13 @@ import {
 } from "../services/api";
 import type {
   Category,
-  ImportedHistoryRow,
   MovementResponsible,
   PaginatedResponse,
   Product,
   StockMovement,
-  VersionedReport,
 } from "../types/api";
 import {
   formatCurrencyBRL,
-  formatDateBR,
   formatDateTimeBR,
   formatQuantity,
   translateMovementType,
@@ -35,12 +33,12 @@ export type ReportTab =
   | "imported-history"
   | "replenishment";
 
-const REPORT_TABS: Array<{ id: ReportTab; label: string; supportsCsv: boolean }> = [
-  { id: "current-stock", label: "Estoque Atual", supportsCsv: true },
-  { id: "below-minimum", label: "Abaixo do Mínimo", supportsCsv: true },
-  { id: "movements", label: "Movimentações", supportsCsv: true },
-  { id: "imported-history", label: "Histórico Importado", supportsCsv: true },
-  { id: "replenishment", label: "Reposição", supportsCsv: false },
+const REPORT_TABS: Array<{ id: ReportTab; label: string; supportsHeaderCsv: boolean }> = [
+  { id: "current-stock", label: "Estoque Atual", supportsHeaderCsv: true },
+  { id: "below-minimum", label: "Abaixo do Mínimo", supportsHeaderCsv: true },
+  { id: "movements", label: "Movimentações", supportsHeaderCsv: true },
+  { id: "imported-history", label: "Histórico Importado", supportsHeaderCsv: false },
+  { id: "replenishment", label: "Reposição", supportsHeaderCsv: false },
 ];
 
 function parseTabParam(raw: string | null): ReportTab {
@@ -76,14 +74,6 @@ interface MovementsFilters {
   end_date: string;
 }
 
-interface ImportedHistoryFilters {
-  sku: string;
-  warehouse: string;
-  event_type: string;
-  start_date: string;
-  end_date: string;
-}
-
 const DEFAULT_CURRENT_STOCK_FILTERS: CurrentStockFilters = {
   search: "",
   category_id: "",
@@ -104,38 +94,11 @@ const DEFAULT_MOVEMENTS_FILTERS: MovementsFilters = {
   end_date: "",
 };
 
-const DEFAULT_IMPORTED_HISTORY_FILTERS: ImportedHistoryFilters = {
-  sku: "",
-  warehouse: "",
-  event_type: "",
-  start_date: "",
-  end_date: "",
-};
-
-function translateImportedEventType(eventType: string): string {
-  const map: Record<string, string> = {
-    sale: "Venda",
-    receipt: "Recebimento",
-    return: "Devolução",
-    other_outbound: "Outra saída",
-    adjustment: "Ajuste",
-  };
-  return map[eventType] ?? eventType;
-}
-
-function translateCoverageStatus(status: string): string {
-  const map: Record<string, string> = {
-    available: "Disponível",
-    stockout: "Ruptura",
-    unknown: "Desconhecida",
-    uncovered: "Sem cobertura",
-  };
-  return map[status] ?? status;
-}
-
 export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = parseTabParam(searchParams.get("tab"));
+  const initialSkuParam = searchParams.get("sku") || "";
+  const initialWarehouseParam = searchParams.get("warehouse") || "";
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [productsList, setProductsList] = useState<Product[]>([]);
@@ -150,9 +113,6 @@ export function ReportsPage() {
   );
   const [movementFilters, setMovementFilters] = useState<MovementsFilters>(
     DEFAULT_MOVEMENTS_FILTERS
-  );
-  const [importedFilters, setImportedFilters] = useState<ImportedHistoryFilters>(
-    DEFAULT_IMPORTED_HISTORY_FILTERS
   );
 
   const [pageByTab, setPageByTab] = useState<Record<ReportTab, number>>({
@@ -176,12 +136,11 @@ export function ReportsPage() {
 
   const [stockRows, setStockRows] = useState<Product[]>([]);
   const [movementRows, setMovementRows] = useState<StockMovement[]>([]);
-  const [importedReport, setImportedReport] =
-    useState<VersionedReport<ImportedHistoryRow> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
 
   const activeTabConfig =
     REPORT_TABS.find((item) => item.id === tab) ?? REPORT_TABS[0];
@@ -203,6 +162,7 @@ export function ReportsPage() {
   const handleSelectTab = (nextTab: ReportTab) => {
     if (nextTab === tab) return;
     setError(null);
+    setExportFeedback(null);
     setSearchParams({ tab: nextTab });
   };
 
@@ -232,23 +192,10 @@ export function ReportsPage() {
           end_date: movementFilters.end_date || undefined,
         };
       case "imported-history":
-        return {
-          sku: importedFilters.sku.trim() || undefined,
-          warehouse: importedFilters.warehouse.trim() || undefined,
-          event_type: importedFilters.event_type || undefined,
-          start_date: importedFilters.start_date || undefined,
-          end_date: importedFilters.end_date || undefined,
-        };
       case "replenishment":
         return {};
     }
-  }, [
-    tab,
-    stockFilters,
-    belowMinFilters,
-    movementFilters,
-    importedFilters,
-  ]);
+  }, [tab, stockFilters, belowMinFilters, movementFilters]);
 
   const handleResetActiveFilters = () => {
     setPage(1);
@@ -263,26 +210,23 @@ export function ReportsPage() {
         setMovementFilters(DEFAULT_MOVEMENTS_FILTERS);
         break;
       case "imported-history":
-        setImportedFilters(DEFAULT_IMPORTED_HISTORY_FILTERS);
-        break;
       case "replenishment":
         break;
     }
   };
 
   const loadReport = useCallback(async () => {
-    if (tab === "replenishment") {
+    if (tab === "replenishment" || tab === "imported-history") {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const pageSize = tab === "imported-history" ? 25 : 20;
       const qs = buildQueryString({
         ...buildActiveParams(),
         page,
-        page_size: pageSize,
+        page_size: 20,
       });
 
       if (tab === "current-stock" || tab === "below-minimum") {
@@ -301,17 +245,9 @@ export function ReportsPage() {
         setMovementRows(res.items);
         setTotal(res.total);
         setTotalPages(res.total_pages);
-      } else if (tab === "imported-history") {
-        const res = await apiRequest<VersionedReport<ImportedHistoryRow>>(
-          `/reports/imported-history${qs}`
-        );
-        setImportedReport(res);
-        setTotal(res.total);
-        setTotalPages(res.total_pages);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erro ao gerar relatório.");
-      if (tab === "imported-history") setImportedReport(null);
     } finally {
       setLoading(false);
     }
@@ -322,25 +258,25 @@ export function ReportsPage() {
   }, [loadReport]);
 
   const handleExportCsv = async () => {
-    if (!activeTabConfig.supportsCsv) return;
+    if (!activeTabConfig.supportsHeaderCsv) return;
     setExporting(true);
     setError(null);
+    setExportFeedback(null);
     try {
       const qs = buildQueryString({ ...buildActiveParams(), export: "csv" });
-      const endpointMap: Record<Exclude<ReportTab, "replenishment">, string> = {
+      const endpointMap: Record<"current-stock" | "below-minimum" | "movements", string> = {
         "current-stock": `/reports/current-stock${qs}`,
         "below-minimum": `/reports/below-minimum${qs}`,
         movements: `/reports/movements${qs}`,
-        "imported-history": `/reports/imported-history${qs}`,
       };
-      const filenameMap: Record<Exclude<ReportTab, "replenishment">, string> = {
+      const filenameMap: Record<"current-stock" | "below-minimum" | "movements", string> = {
         "current-stock": "relatorio_estoque_atual.csv",
         "below-minimum": "relatorio_abaixo_minimo.csv",
         movements: "relatorio_movimentacoes.csv",
-        "imported-history": "relatorio_historico_importado.csv",
       };
-      const csvTab = tab as Exclude<ReportTab, "replenishment">;
+      const csvTab = tab as "current-stock" | "below-minimum" | "movements";
       await downloadAuthenticatedFile(endpointMap[csvTab], filenameMap[csvTab]);
+      setExportFeedback("Relatório CSV exportado com os filtros ativos.");
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Falha ao exportar relatório CSV."
@@ -360,7 +296,7 @@ export function ReportsPage() {
           </p>
         </div>
         <div className="header-actions">
-          {activeTabConfig.supportsCsv ? (
+          {activeTabConfig.supportsHeaderCsv ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -373,6 +309,12 @@ export function ReportsPage() {
           ) : null}
         </div>
       </div>
+
+      {exportFeedback ? (
+        <div className="alert alert-success" role="status">
+          {exportFeedback}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="alert alert-error" role="alert">
@@ -408,6 +350,12 @@ export function ReportsPage() {
       >
         {tab === "replenishment" ? (
           <ReplenishmentTabPanel />
+        ) : tab === "imported-history" ? (
+          <ImportedHistoryTabPanel
+            initialSku={initialSkuParam}
+            initialWarehouse={initialWarehouseParam}
+            onExportFeedback={setExportFeedback}
+          />
         ) : (
           <>
         <div className="filters-bar">
@@ -622,95 +570,6 @@ export function ReportsPage() {
             </>
           ) : null}
 
-          {tab === "imported-history" ? (
-            <>
-              <div className="form-field" style={{ flex: "1 1 180px" }}>
-                <label htmlFor="rep-imp-sku">SKU</label>
-                <input
-                  id="rep-imp-sku"
-                  type="search"
-                  className="input"
-                  value={importedFilters.sku}
-                  onChange={(e) => {
-                    setImportedFilters((prev) => ({ ...prev, sku: e.target.value }));
-                    setPage(1);
-                  }}
-                  placeholder="Ex: DEMO-001"
-                />
-              </div>
-              <div className="form-field" style={{ minWidth: 130 }}>
-                <label htmlFor="rep-imp-wh">Depósito</label>
-                <input
-                  id="rep-imp-wh"
-                  type="text"
-                  className="input"
-                  value={importedFilters.warehouse}
-                  onChange={(e) => {
-                    setImportedFilters((prev) => ({
-                      ...prev,
-                      warehouse: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                  placeholder="Ex: 1"
-                />
-              </div>
-              <div className="form-field" style={{ minWidth: 155 }}>
-                <label htmlFor="rep-imp-type">Evento</label>
-                <select
-                  id="rep-imp-type"
-                  className="select"
-                  value={importedFilters.event_type}
-                  onChange={(e) => {
-                    setImportedFilters((prev) => ({
-                      ...prev,
-                      event_type: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                >
-                  <option value="">Todos</option>
-                  <option value="sale">Venda</option>
-                  <option value="receipt">Recebimento</option>
-                  <option value="return">Devolução</option>
-                  <option value="other_outbound">Outra saída</option>
-                </select>
-              </div>
-              <div className="form-field">
-                <label htmlFor="rep-imp-start">De</label>
-                <input
-                  id="rep-imp-start"
-                  type="date"
-                  className="input"
-                  value={importedFilters.start_date}
-                  onChange={(e) => {
-                    setImportedFilters((prev) => ({
-                      ...prev,
-                      start_date: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="rep-imp-end">Até</label>
-                <input
-                  id="rep-imp-end"
-                  type="date"
-                  className="input"
-                  value={importedFilters.end_date}
-                  onChange={(e) => {
-                    setImportedFilters((prev) => ({
-                      ...prev,
-                      end_date: e.target.value,
-                    }));
-                    setPage(1);
-                  }}
-                />
-              </div>
-            </>
-          ) : null}
-
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -828,78 +687,6 @@ export function ReportsPage() {
                           {m.unit_snapshot}
                         </td>
                         <td>{m.user_name}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                totalItems={total}
-                onPageChange={setPage}
-              />
-            </>
-          )
-        ) : tab === "imported-history" ? (
-          !importedReport || importedReport.items.length === 0 ? (
-            <div className="state-box">
-              <h3>Histórico importado sem registros no recorte</h3>
-              <p>
-                {importedReport?.status_message ||
-                  "Nenhum registro de histórico importado encontrado para os filtros informados."}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Data do evento</th>
-                      <th>SKU / Produto</th>
-                      <th>Depósito</th>
-                      <th>Evento</th>
-                      <th className="td-numeric">Quantidade</th>
-                      <th className="td-numeric">Custo Unit.</th>
-                      <th>Disponibilidade</th>
-                      <th>Lote / Data fonte</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importedReport.items.map((row) => (
-                      <tr key={row.record_id}>
-                        <td>{formatDateBR(row.event_date)}</td>
-                        <td>
-                          <span className="mono">{row.sku}</span> — {row.product_name}
-                        </td>
-                        <td className="mono">{row.warehouse}</td>
-                        <td>{translateImportedEventType(row.event_type)}</td>
-                        <td className="td-numeric">
-                          {formatQuantity(row.quantity, row.unit)} {row.unit}
-                        </td>
-                        <td className="td-numeric">
-                          {row.unit_cost !== null
-                            ? formatCurrencyBRL(row.unit_cost)
-                            : "—"}
-                        </td>
-                        <td>
-                          <span
-                            className={`badge ${
-                              row.stock_availability === "stockout"
-                                ? "badge-danger"
-                                : row.stock_availability === "available"
-                                ? "badge-success"
-                                : "badge-neutral"
-                            }`}
-                          >
-                            {translateCoverageStatus(row.stock_availability)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="mono">{row.batch_id}</span>
-                          {row.source_date ? ` · ${formatDateBR(row.source_date)}` : ""}
-                        </td>
                       </tr>
                     ))}
                   </tbody>

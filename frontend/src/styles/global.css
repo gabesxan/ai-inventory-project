@@ -1017,6 +1017,23 @@ table.data-table th.td-numeric,
   color: var(--ink-muted);
 }
 
+.panel-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.panel-section-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--ink-primary);
+}
+
 /* Comparação de políticas (FE-12) */
 .comparison-section {
   margin-top: var(--space-6);
