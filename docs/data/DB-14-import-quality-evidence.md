@@ -26,7 +26,7 @@ Filters: `warehouse`, `batch_id`. Pagination: `page` from 1, `page_size` 1–200
 
 ## Real data (extract `run-a`, database `fb15_import_check`)
 
-One batch, `fb-d4079f9af3e41935cca15bf4`: `imported`, warehouse `estoquefacil-fb15/1/local/1`, 2024-02-28 → 2026-11-18, `source_date` null, accepted 650,376 · rejected 690 (`document_does_not_move_stock` 239, `receipt_quantity_unavailable` 451) · duplicates 0, coverage available 609,488 · unknown 4,653,680 · stockout 0 · uncovered 0. An operator gets 403. These equal the loader's totals.
+One batch, `fb-cf6383848e73fdde76569d0b`: `imported`, warehouse `estoquefacil-fb15/1/local/1`, 2024-02-28 → 2026-11-18, `source_date` null, accepted 650,376 · rejected 690 (`document_does_not_move_stock` 239, `receipt_quantity_unavailable` 451) · duplicates 0, coverage available 609,488 · unknown 4,653,680 · stockout 0 · uncovered 0. An operator gets 403. These equal the loader's totals.
 
 ## Verification
 

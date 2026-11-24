@@ -158,3 +158,31 @@ def test_receipt_without_document_or_quantity_is_not_a_zero_receipt(extract, sta
     r = _run(extract, staged)
     assert {"dataset": "receipts", "line_number": 4, "reason": "receipt_quantity_unavailable"} in r.preview["diagnostics"]
     assert r.reason_counts["receipt_quantity_unavailable"] == 1 and r.class_counts["receipt"] == 1
+
+
+def test_reextracting_the_same_snapshot_keeps_its_identity(tmp_path, staged):
+    tables = {"T": {"row_count": 1, "chunks": [{"file": "T/part-1.csv", "sha256": "aa"}]}}
+
+    def extract(name, run, tables_):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "manifest.json").write_text(json.dumps({"format_version": 1, "run": run, "tables": tables_}))
+        return d
+    a = fingerprint(extract("a", {"extracted_at_utc": "2026-11-23T21:19:26Z", "db_path": "/x"}, tables), staged)
+    b = fingerprint(extract("b", {"extracted_at_utc": "2026-11-23T21:51:49Z", "db_path": "/y"}, tables), staged)
+    changed = {"T": {"row_count": 1, "chunks": [{"file": "T/part-1.csv", "sha256": "bb"}]}}
+    c = fingerprint(extract("c", {"extracted_at_utc": "2026-11-23T21:19:26Z", "db_path": "/x"}, changed), staged)
+    assert a == b and a != c
+
+
+def test_gzip_header_timestamp_does_not_change_the_fingerprint(extract, staged, tmp_path):
+    import dataclasses
+    import gzip
+    path = tmp_path / "series.csv.gz"
+    path.write_bytes(gzip.compress(b"product_key,day,status\nk,2025-07-21,sale\n", mtime=1))
+    with_series = dataclasses.replace(staged, series=path)
+    a = fingerprint(extract, with_series)
+    path.write_bytes(gzip.compress(b"product_key,day,status\nk,2025-07-21,sale\n", mtime=99999))   # same content
+    assert fingerprint(extract, with_series) == a
+    path.write_bytes(gzip.compress(b"product_key,day,status\nk,2025-07-22,sale\n", mtime=1))       # different content
+    assert fingerprint(extract, with_series) != a

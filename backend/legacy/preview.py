@@ -17,6 +17,7 @@ touched. Confirmation is a separate step (DB-02).
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import sys
@@ -41,16 +42,28 @@ class PreviewResult:
 
 
 def _sha256(p: Path) -> str:
+    """Hash of the CONTENT: a .gz is hashed decompressed, because its header carries a timestamp."""
     h = hashlib.sha256()
-    with p.open("rb") as f:
+    with (gzip.open(p, "rb") if p.suffix == ".gz" else p.open("rb")) as f:
         for b in iter(lambda: f.read(1 << 20), b""):
             h.update(b)
     return h.hexdigest()
 
 
+def _manifest_identity(extract_dir: Path) -> str:
+    """Hash of the manifest WITHOUT its ``run`` block (extraction time and path).
+
+    Every table hash stays in. Re-extracting the same snapshot therefore keeps its identity, while any
+    change to the data, the scope or the source changes it.
+    """
+    m = json.loads((extract_dir / "manifest.json").read_text(encoding="utf-8"))
+    m.pop("run", None)
+    return hashlib.sha256(json.dumps(m, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def fingerprint(extract_dir: Path, staged: StagedInputs) -> str:
-    """Identity of the exact extract and staged inputs; the same files always give the same value."""
-    parts = [_sha256(extract_dir / "manifest.json")]
+    """Identity of the extract content and staged inputs; the same data always gives the same value."""
+    parts = [_manifest_identity(extract_dir)]
     for p in (staged.products, staged.events, staged.receipts, staged.receipt_lines, staged.series_index, staged.series):
         if p is not None:
             parts.append(_sha256(p))
