@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, SlidersHorizontal } from "lucide-react";
 import { apiRequest, ApiError } from "../services/api";
 import type { Product, Supplier } from "../types/api";
@@ -49,6 +49,7 @@ export function MovementModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const inFlightRef = useRef(false);
 
   const selectedProduct = activeProducts.find((p) => String(p.id) === productId) || null;
 
@@ -126,8 +127,10 @@ export function MovementModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current || submitting) return;
     if (!validate() || !selectedProduct) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     const qtyValue = quantity.replace(",", ".").trim();
@@ -178,11 +181,15 @@ export function MovementModal({
       onClose();
     } catch (err) {
       if (err instanceof ApiError) {
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
         setSubmitError(err.message);
       } else {
         setSubmitError("Não foi possível concluir a movimentação.");
       }
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -323,7 +330,7 @@ export function MovementModal({
                   onChange={(e) => setUnitCost(e.target.value)}
                 />
                 <span className="form-hint">
-                  Preservado no histórico para análises de custo e IA.
+                  Preservado no histórico de custos do produto.
                 </span>
                 {fieldErrors.unitCost ? (
                   <span className="field-error">{fieldErrors.unitCost}</span>

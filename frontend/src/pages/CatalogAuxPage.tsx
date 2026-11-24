@@ -1,18 +1,25 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Ban, CheckCircle2, Pencil, Plus } from "lucide-react";
+import { Ban, CheckCircle2, Info, Pencil, Plus, RotateCcw } from "lucide-react";
 import { Modal } from "../components/Modal";
 import { useAuth } from "../context/AuthContext";
 import { apiRequest, ApiError, buildQueryString } from "../services/api";
 import type { Category, PaginatedResponse, Supplier } from "../types/api";
 
+type CatalogTab = "categories" | "suppliers";
+
 export function CatalogAuxPage() {
   const { isAdmin } = useAuth();
-  const [tab, setTab] = useState<"categories" | "suppliers">("categories");
+  const [tab, setTab] = useState<CatalogTab>("categories");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+
+  // Independent search state per tab so switching tabs never leaks filters or rows
+  const [categorySearch, setCategorySearch] = useState("");
+  const [supplierSearch, setSupplierSearch] = useState("");
+
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -37,32 +44,51 @@ export function CatalogAuxPage() {
   const [supError, setSupError] = useState<string | null>(null);
   const [savingSup, setSavingSup] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadCategories = useCallback(async () => {
+    setLoadingCategories(true);
     setError(null);
     try {
       const qs = buildQueryString({
-        search: search.trim() || undefined,
+        search: categorySearch.trim() || undefined,
         page_size: 200,
       });
-      const [catRes, supRes] = await Promise.all([
-        apiRequest<PaginatedResponse<Category>>(`/categories${qs}`),
-        apiRequest<PaginatedResponse<Supplier>>(`/suppliers${qs}`),
-      ]);
-      setCategories(catRes.items);
-      setSuppliers(supRes.items);
+      const res = await apiRequest<PaginatedResponse<Category>>(`/categories${qs}`);
+      setCategories(res.items);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Erro ao carregar cadastros."
+        err instanceof ApiError ? err.message : "Erro ao carregar categorias."
       );
     } finally {
-      setLoading(false);
+      setLoadingCategories(false);
     }
-  }, [search]);
+  }, [categorySearch]);
+
+  const loadSuppliers = useCallback(async () => {
+    setLoadingSuppliers(true);
+    setError(null);
+    try {
+      const qs = buildQueryString({
+        search: supplierSearch.trim() || undefined,
+        page_size: 200,
+      });
+      const res = await apiRequest<PaginatedResponse<Supplier>>(`/suppliers${qs}`);
+      setSuppliers(res.items);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Erro ao carregar fornecedores."
+      );
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  }, [supplierSearch]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
 
   const openCatModal = (cat?: Category) => {
     setEditingCat(cat || null);
@@ -99,7 +125,7 @@ export function CatalogAuxPage() {
         setFeedback(`Categoria "${payload.name}" cadastrada.`);
       }
       setCatModalOpen(false);
-      await loadData();
+      await loadCategories();
     } catch (err) {
       setCatError(
         err instanceof ApiError ? err.message : "Erro ao salvar categoria."
@@ -110,6 +136,7 @@ export function CatalogAuxPage() {
   };
 
   const handleToggleCategory = async (cat: Category) => {
+    setError(null);
     try {
       await apiRequest(`/categories/${cat.id}/status`, {
         method: "PATCH",
@@ -118,7 +145,7 @@ export function CatalogAuxPage() {
       setFeedback(
         `Categoria "${cat.name}" ${!cat.is_active ? "ativada" : "inativada"}.`
       );
-      await loadData();
+      await loadCategories();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erro ao atualizar status.");
     }
@@ -147,6 +174,13 @@ export function CatalogAuxPage() {
       setSupError("Informe o nome do fornecedor (mínimo 2 caracteres).");
       return;
     }
+    if (supLeadTime.trim()) {
+      const lt = Number(supLeadTime);
+      if (!Number.isInteger(lt) || lt < 0) {
+        setSupError("Informe um prazo padrão inteiro em dias (>= 0).");
+        return;
+      }
+    }
     setSavingSup(true);
     setSupError(null);
     try {
@@ -173,7 +207,7 @@ export function CatalogAuxPage() {
         setFeedback(`Fornecedor "${payload.name}" cadastrado.`);
       }
       setSupModalOpen(false);
-      await loadData();
+      await loadSuppliers();
     } catch (err) {
       setSupError(
         err instanceof ApiError ? err.message : "Erro ao salvar fornecedor."
@@ -184,6 +218,7 @@ export function CatalogAuxPage() {
   };
 
   const handleToggleSupplier = async (sup: Supplier) => {
+    setError(null);
     try {
       await apiRequest(`/suppliers/${sup.id}/status`, {
         method: "PATCH",
@@ -192,11 +227,18 @@ export function CatalogAuxPage() {
       setFeedback(
         `Fornecedor "${sup.name}" ${!sup.is_active ? "ativado" : "inativado"}.`
       );
-      await loadData();
+      await loadSuppliers();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erro ao atualizar status.");
     }
   };
+
+  const activeSearch = tab === "categories" ? categorySearch : supplierSearch;
+  const setActiveSearch = (value: string) => {
+    if (tab === "categories") setCategorySearch(value);
+    else setSupplierSearch(value);
+  };
+  const isTabLoading = tab === "categories" ? loadingCategories : loadingSuppliers;
 
   return (
     <div>
@@ -204,7 +246,7 @@ export function CatalogAuxPage() {
         <div>
           <h1>Categorias e Fornecedores</h1>
           <p className="page-subtitle">
-            Organize os produtos por categoria e registre os fornecedores com prazo médio de entrega.
+            Organize o catálogo por categoria e mantenha fornecedores com identificação e prazo padrão de entrega.
           </p>
         </div>
         {isAdmin ? (
@@ -215,7 +257,7 @@ export function CatalogAuxPage() {
                 className="btn btn-primary"
                 onClick={() => openCatModal()}
               >
-                <Plus size={16} />
+                <Plus size={16} aria-hidden="true" />
                 <span>Nova Categoria</span>
               </button>
             ) : (
@@ -224,13 +266,22 @@ export function CatalogAuxPage() {
                 className="btn btn-primary"
                 onClick={() => openSupModal()}
               >
-                <Plus size={16} />
+                <Plus size={16} aria-hidden="true" />
                 <span>Novo Fornecedor</span>
               </button>
             )}
           </div>
         ) : null}
       </div>
+
+      {!isAdmin ? (
+        <div className="alert alert-info" role="status" data-testid="catalog-readonly-notice">
+          <Info size={16} className="alert-icon" aria-hidden="true" />
+          <div>
+            Modo de consulta: apenas administradores podem criar, editar ou alterar o status de categorias e fornecedores.
+          </div>
+        </div>
+      ) : null}
 
       {feedback ? (
         <div className="alert alert-success" role="status">
@@ -243,9 +294,13 @@ export function CatalogAuxPage() {
         </div>
       ) : null}
 
-      <div className="tabs-bar">
+      <div className="tabs-bar" role="tablist" aria-label="Cadastros auxiliares">
         <button
           type="button"
+          role="tab"
+          id="aux-tab-categories"
+          aria-selected={tab === "categories"}
+          aria-controls="aux-panel-categories"
           className={`tab-btn ${tab === "categories" ? "active" : ""}`}
           onClick={() => setTab("categories")}
         >
@@ -253,6 +308,10 @@ export function CatalogAuxPage() {
         </button>
         <button
           type="button"
+          role="tab"
+          id="aux-tab-suppliers"
+          aria-selected={tab === "suppliers"}
+          aria-controls="aux-panel-suppliers"
           className={`tab-btn ${tab === "suppliers" ? "active" : ""}`}
           onClick={() => setTab("suppliers")}
         >
@@ -260,28 +319,59 @@ export function CatalogAuxPage() {
         </button>
       </div>
 
-      <div className="card">
+      <section
+        id={`aux-panel-${tab}`}
+        role="tabpanel"
+        aria-labelledby={`aux-tab-${tab}`}
+        className="card"
+      >
         <div className="filters-bar">
-          <div className="form-field" style={{ maxWidth: 360, width: "100%" }}>
-            <label htmlFor="aux-search">Pesquisar</label>
+          <div className="form-field" style={{ flex: "1 1 280px", maxWidth: 400 }}>
+            <label htmlFor="aux-search">
+              {tab === "categories"
+                ? "Pesquisar categorias"
+                : "Pesquisar fornecedores"}
+            </label>
             <input
               id="aux-search"
               type="search"
               className="input"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filtrar por nome..."
+              value={activeSearch}
+              onChange={(e) => setActiveSearch(e.target.value)}
+              placeholder={
+                tab === "categories"
+                  ? "Filtrar categoria por nome..."
+                  : "Filtrar fornecedor por nome..."
+              }
             />
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setActiveSearch("")}
+            disabled={!activeSearch}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            <span>Limpar busca</span>
+          </button>
         </div>
 
-        {loading ? (
+        {isTabLoading ? (
           <div className="state-box">Carregando registros...</div>
         ) : tab === "categories" ? (
           categories.length === 0 ? (
-            <div className="state-box">Nenhuma categoria cadastrada.</div>
+            <div className="state-box">
+              {categorySearch.trim()
+                ? "Nenhuma categoria encontrada para a busca informada."
+                : "Nenhuma categoria cadastrada."}
+            </div>
           ) : (
-            <div className="table-wrap">
+            <div
+              className="table-wrap"
+              role="region"
+              aria-label="Tabela de categorias"
+              tabIndex={0}
+            >
               <table className="data-table">
                 <thead>
                   <tr>
@@ -315,7 +405,7 @@ export function CatalogAuxPage() {
                               className="btn btn-secondary btn-sm"
                               onClick={() => openCatModal(cat)}
                             >
-                              <Pencil size={14} />
+                              <Pencil size={14} aria-hidden="true" />
                               <span>Editar</span>
                             </button>
                             <button
@@ -325,12 +415,12 @@ export function CatalogAuxPage() {
                             >
                               {cat.is_active ? (
                                 <>
-                                  <Ban size={14} />
+                                  <Ban size={14} aria-hidden="true" />
                                   <span>Inativar</span>
                                 </>
                               ) : (
                                 <>
-                                  <CheckCircle2 size={14} />
+                                  <CheckCircle2 size={14} aria-hidden="true" />
                                   <span>Reativar</span>
                                 </>
                               )}
@@ -345,16 +435,25 @@ export function CatalogAuxPage() {
             </div>
           )
         ) : suppliers.length === 0 ? (
-          <div className="state-box">Nenhum fornecedor cadastrado.</div>
+          <div className="state-box">
+            {supplierSearch.trim()
+              ? "Nenhum fornecedor encontrado para a busca informada."
+              : "Nenhum fornecedor cadastrado."}
+          </div>
         ) : (
-          <div className="table-wrap">
+          <div
+            className="table-wrap"
+            role="region"
+            aria-label="Tabela de fornecedores"
+            tabIndex={0}
+          >
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Fornecedor</th>
                   <th>CNPJ / CPF</th>
                   <th>Contato / Telefone / E-mail</th>
-                  <th>Prazo Padrão</th>
+                  <th className="td-numeric">Prazo Padrão</th>
                   <th>Status</th>
                   {isAdmin ? <th>Ações</th> : null}
                 </tr>
@@ -368,11 +467,11 @@ export function CatalogAuxPage() {
                     <td className="mono">{sup.document || "—"}</td>
                     <td>
                       <div>{sup.contact_name || "—"}</div>
-                      <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                      <div className="cell-subtext">
                         {[sup.phone, sup.email].filter(Boolean).join(" · ") || "—"}
                       </div>
                     </td>
-                    <td>
+                    <td className="td-numeric">
                       {sup.default_lead_time_days !== null
                         ? `${sup.default_lead_time_days} dias`
                         : "—"}
@@ -394,7 +493,7 @@ export function CatalogAuxPage() {
                             className="btn btn-secondary btn-sm"
                             onClick={() => openSupModal(sup)}
                           >
-                            <Pencil size={14} />
+                            <Pencil size={14} aria-hidden="true" />
                             <span>Editar</span>
                           </button>
                           <button
@@ -404,12 +503,12 @@ export function CatalogAuxPage() {
                           >
                             {sup.is_active ? (
                               <>
-                                <Ban size={14} />
+                                <Ban size={14} aria-hidden="true" />
                                 <span>Inativar</span>
                               </>
                             ) : (
                               <>
-                                <CheckCircle2 size={14} />
+                                <CheckCircle2 size={14} aria-hidden="true" />
                                 <span>Reativar</span>
                               </>
                             )}
@@ -423,7 +522,7 @@ export function CatalogAuxPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
 
       <Modal
         isOpen={catModalOpen}
@@ -444,20 +543,24 @@ export function CatalogAuxPage() {
               className="btn btn-primary"
               disabled={savingCat}
             >
-              <CheckCircle2 size={16} />
+              <CheckCircle2 size={15} aria-hidden="true" />
               <span>{savingCat ? "Salvando..." : "Salvar Categoria"}</span>
             </button>
           </>
         }
       >
-        {catError ? <div className="alert alert-error">{catError}</div> : null}
+        {catError ? (
+          <div className="alert alert-error" role="alert">
+            {catError}
+          </div>
+        ) : null}
         <form id="cat-form" onSubmit={handleSaveCategory} className="form-grid">
           <div className="form-field full">
             <label htmlFor="cat-name">Nome *</label>
             <input
               id="cat-name"
               type="text"
-              className="input"
+              className={`input ${catError ? "has-error" : ""}`}
               value={catName}
               onChange={(e) => setCatName(e.target.value)}
             />
@@ -493,20 +596,24 @@ export function CatalogAuxPage() {
               className="btn btn-primary"
               disabled={savingSup}
             >
-              <CheckCircle2 size={16} />
+              <CheckCircle2 size={15} aria-hidden="true" />
               <span>{savingSup ? "Salvando..." : "Salvar Fornecedor"}</span>
             </button>
           </>
         }
       >
-        {supError ? <div className="alert alert-error">{supError}</div> : null}
+        {supError ? (
+          <div className="alert alert-error" role="alert">
+            {supError}
+          </div>
+        ) : null}
         <form id="sup-form" onSubmit={handleSaveSupplier} className="form-grid">
           <div className="form-field full">
             <label htmlFor="sup-name">Razão Social / Nome *</label>
             <input
               id="sup-name"
               type="text"
-              className="input"
+              className={`input ${supError ? "has-error" : ""}`}
               value={supName}
               onChange={(e) => setSupName(e.target.value)}
             />
@@ -516,7 +623,7 @@ export function CatalogAuxPage() {
             <input
               id="sup-doc"
               type="text"
-              className="input"
+              className="input mono"
               value={supDoc}
               onChange={(e) => setSupDoc(e.target.value)}
             />

@@ -295,6 +295,23 @@ export function MovementsPage() {
               }}
             />
           </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setSearch("");
+              setProductFilter("");
+              setTypeFilter("");
+              setUserFilter("");
+              setStartDate("");
+              setEndDate("");
+              setPage(1);
+            }}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            <span>Limpar filtros</span>
+          </button>
         </div>
 
         {loading ? (
@@ -305,15 +322,23 @@ export function MovementsPage() {
           </div>
         ) : (
           <>
-            <div className="table-wrap">
+            <div className="table-scroll-hint" aria-hidden="true">
+              Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+            </div>
+            <div
+              className="table-wrap"
+              role="region"
+              aria-label="Tabela de histórico de movimentações"
+              tabIndex={0}
+            >
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Data/Hora</th>
                     <th>Produto</th>
                     <th>Tipo / Motivo</th>
-                    <th>Quantidade</th>
-                    <th>Saldo (Antes → Depois)</th>
+                    <th className="td-numeric">Quantidade</th>
+                    <th className="td-numeric">Saldo (Antes → Depois)</th>
                     <th>Custo / Fornecedor</th>
                     <th>Responsável / Obs.</th>
                     {isAdmin ? <th>Ações</th> : null}
@@ -355,19 +380,18 @@ export function MovementsPage() {
                           <div style={{ fontSize: "0.82rem", marginTop: 4 }}>
                             {translateReasonCode(mv.reason_code)}
                             {mv.is_demand ? (
-                              <span
-                                className="badge badge-neutral"
-                                style={{ marginLeft: 6 }}
-                              >
-                                Demanda IA
+                              <span className="cell-subtext" style={{ marginLeft: 6 }}>
+                                · Demanda
                               </span>
                             ) : null}
                           </div>
                         </td>
-                        <td>
+                        <td className="td-numeric">
                           <strong
                             style={{
-                              color: isPositive ? "#15803d" : "#b91c1c",
+                              color: isPositive
+                                ? "var(--state-success)"
+                                : "var(--state-danger)",
                             }}
                           >
                             {isPositive ? "+" : "-"}
@@ -375,7 +399,7 @@ export function MovementsPage() {
                             {mv.unit_snapshot}
                           </strong>
                         </td>
-                        <td>
+                        <td className="td-numeric">
                           {formatQuantity(mv.balance_before, mv.unit_snapshot)} →{" "}
                           <strong>
                             {formatQuantity(mv.balance_after, mv.unit_snapshot)}{" "}
