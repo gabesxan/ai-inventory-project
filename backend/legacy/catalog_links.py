@@ -94,17 +94,6 @@ def build_plan(ex: Extract) -> CatalogPlan:
     return plan
 
 
-DDL = """
-CREATE TABLE IF NOT EXISTS legacy_origin (
-    entity varchar(20) NOT NULL, origin_key varchar(120) NOT NULL, target_id integer NOT NULL,
-    PRIMARY KEY (entity, origin_key));
-CREATE TABLE IF NOT EXISTS legacy_product_suppliers (
-    product_id integer NOT NULL REFERENCES products(id), supplier_id integer NOT NULL REFERENCES suppliers(id),
-    source varchar(40) NOT NULL, PRIMARY KEY (product_id, supplier_id, source));
-CREATE TABLE IF NOT EXISTS legacy_unresolved_links (
-    product_key varchar(120) NOT NULL, kind varchar(40) NOT NULL, detail text NOT NULL,
-    PRIMARY KEY (product_key, kind, detail));
-"""
 
 
 def _upsert(cur, entity: str, key: str, insert_sql: str, insert_args: tuple, update_sql: str, update_args: tuple) -> int:
@@ -123,7 +112,6 @@ def import_plan(conn, plan: CatalogPlan) -> dict:
     """Idempotent import in ONE transaction; reconciles every row by its origin key."""
     ids: Dict[str, int] = {}
     with conn.transaction(), conn.cursor() as cur:
-        cur.execute(DDL)
         for k, name in sorted(plan.categories.items()):
             ids[k] = _upsert(cur, "category", k, "INSERT INTO categories (name) VALUES (%s) RETURNING id", (name,),
                              "UPDATE categories SET name = %s WHERE id = %s", (name,))

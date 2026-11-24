@@ -100,24 +100,6 @@ def select_snapshot(ex: Extract) -> Selection:
     return Selection(snap, disc, reason)
 
 
-DDL = """
-CREATE TABLE IF NOT EXISTS legacy_opening_snapshots (
-    snapshot_id   varchar(32) PRIMARY KEY,
-    source_date   date NOT NULL,
-    warehouse_key varchar(120) NOT NULL,
-    source        varchar(120) NOT NULL,
-    label         text NOT NULL,
-    imported_at   timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS legacy_opening_entries (
-    product_key   varchar(120) PRIMARY KEY,
-    snapshot_id   varchar(32) NOT NULL REFERENCES legacy_opening_snapshots(snapshot_id),
-    product_id    integer NOT NULL REFERENCES products(id),
-    qty           numeric(14,3) NOT NULL CHECK (qty >= 0),
-    source_date   date NOT NULL,
-    movement_id   integer NULL REFERENCES stock_movements(id)
-);
-"""
 
 
 def import_snapshot(conn, snap: Snapshot, user_id: int) -> Dict:
@@ -125,7 +107,6 @@ def import_snapshot(conn, snap: Snapshot, user_id: int) -> Dict:
     res = {"created": 0, "zero_recorded": 0, "already_imported": 0, "refused": [], "missing_product": 0}
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute(DDL)
             cur.execute(
                 "INSERT INTO legacy_opening_snapshots (snapshot_id, source_date, warehouse_key, source, label) "
                 "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (snapshot_id) DO NOTHING",
