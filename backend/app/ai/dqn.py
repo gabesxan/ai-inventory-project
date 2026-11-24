@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import math
 import random
 from collections import deque
 from collections.abc import Sequence
@@ -71,7 +72,7 @@ def train_dqn(
     *,
     passes: int = 1,
     epsilon_by_step: bool = False,
-    epsilon_decay_fraction: float = 0.8,
+    epsilon_decay_fraction: float = 0.8, reward_scale: float = 1.0,
 ) -> tuple[DQN, int]:
     """Learn from training episodes only and return the number of optimizer updates."""
     if not episodes:
@@ -82,6 +83,8 @@ def train_dqn(
         raise ValueError("Epsilon decay fraction must be in (0, 1]")
     if not epsilon_by_step and epsilon_decay_fraction != 0.8:
         raise ValueError("A custom epsilon decay fraction requires per-step decay")
+    if not math.isfinite(reward_scale) or reward_scale <= 0:
+        raise ValueError("Reward scale must be positive and finite")
     torch.set_num_threads(1)
     torch.manual_seed(training.seed)
     rng = random.Random(training.seed)
@@ -116,7 +119,8 @@ def train_dqn(
             day = env.step(action)
             terminal = day.terminal
             total_cost += day.cost
-            memory.append((_features(state, inventory), action, -day.cost,
+            reward = -day.cost if reward_scale == 1 else -day.cost / reward_scale
+            memory.append((_features(state, inventory), action, reward,
                            _features(day.next_observation, inventory), terminal))
             steps += 1
             if steps % training.update_every == 0 and len(memory) >= training.batch_size:
@@ -148,7 +152,7 @@ def save_checkpoint(
     path: Path, policy: DQN, training: TrainingConfig, episodes: Sequence[Episode], updates: int,
     *, source: str = "synthetic", scenarios: Sequence[Scenario] = DEMO_SCENARIOS,
     calibration: dict | None = None, training_passes: int = 1,
-    epsilon_by_step: bool = False, epsilon_decay_fraction: float = 0.8,
+    epsilon_by_step: bool = False, epsilon_decay_fraction: float = 0.8, reward_scale: float = 1.0,
 ) -> dict:
     metadata = {
         "format_version": 1,
@@ -169,6 +173,8 @@ def save_checkpoint(
         metadata["epsilon_schedule"] = "step"
     if epsilon_decay_fraction != 0.8:
         metadata["epsilon_decay_fraction"] = epsilon_decay_fraction
+    if reward_scale != 1.0:
+        metadata["reward_scale"] = reward_scale
     if calibration is not None:
         metadata["calibration"] = calibration
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -196,17 +202,17 @@ def load_checkpoint(path: Path) -> tuple[DQN, dict]:
 
 def train_demo(
     path: Path, seed: int = 42, *, passes: int = 1, epsilon_by_step: bool = False,
-    epsilon_decay_fraction: float = 0.8,
+    epsilon_decay_fraction: float = 0.8, reward_scale: float = 1.0,
 ) -> tuple[DQN, dict]:
     training = TrainingConfig(seed=seed)
     episodes = demo_episodes("train")
     policy, updates = train_dqn(
         episodes, DEMO_INVENTORY, training, passes=passes, epsilon_by_step=epsilon_by_step,
-        epsilon_decay_fraction=epsilon_decay_fraction,
+        epsilon_decay_fraction=epsilon_decay_fraction, reward_scale=reward_scale,
     )
     return policy, save_checkpoint(
         path, policy, training, episodes, updates, training_passes=passes, epsilon_by_step=epsilon_by_step,
-        epsilon_decay_fraction=epsilon_decay_fraction,
+        epsilon_decay_fraction=epsilon_decay_fraction, reward_scale=reward_scale,
     )
 
 
@@ -220,9 +226,13 @@ if __name__ == "__main__":
         "--epsilon-decay-fraction", type=float, default=0.8,
         help="Fraction of total steps for the per-step decay (default: 0.8)",
     )
+    parser.add_argument(
+        "--reward-scale", type=float, default=1.0,
+        help="Divide training rewards by this positive scale",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     train_demo(
         args.checkpoint, args.seed, passes=args.passes, epsilon_by_step=args.epsilon_by_step,
-        epsilon_decay_fraction=args.epsilon_decay_fraction,
+        epsilon_decay_fraction=args.epsilon_decay_fraction, reward_scale=args.reward_scale,
     )
