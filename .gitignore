@@ -31,5 +31,7 @@ frontend/.vite/
 *.p12
 *.pfx
 .local/
+*.pt
+*.pth
 playwright-report/
 test-results/

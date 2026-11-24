@@ -1,5 +1,16 @@
 # Preparação para o Projeto Final de IA: Dados, Contrato e Avaliação Acadêmica
 
+## DQN local em CPU
+
+Na raiz do repositório, instale as dependências do backend e treine com os episódios sintéticos do projeto.
+
+```sh
+python -m pip install -r backend/requirements-dqn.txt
+PYTHONPATH=backend python -m app.ai.dqn .local/dqn-demo.pt --seed 42
+```
+
+O checkpoint local guarda os pesos, a configuração e os identificadores dos episódios de treino. O simulador cobra armazenagem, emissão e falta, com recebimentos no início do dia e valor residual zero no horizonte. Os parâmetros da simulação são hipóteses acadêmicas. [Tutorial de DQN do PyTorch](https://docs.pytorch.org/tutorials/intermediate/reinforcement_q_learning.html)
+
 Este documento detalha como os dados operacionais e históricos do sistema são estruturados, exportados e preparados para o módulo futuro de **previsão de demanda e recomendação de compras** em Python (`pandas` e `scikit-learn`), mantendo separação estrita das regras transacionais de estoque.
 
 ---
