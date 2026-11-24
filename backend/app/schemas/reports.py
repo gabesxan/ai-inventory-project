@@ -12,6 +12,7 @@ from app.schemas.catalog import PaginatedResponse
 ReportStatus = Literal["ready", "calculating", "insufficient_data", "stale", "empty"]
 ModelSource = Literal["synthetic", "legacy_calibrated"]
 Coverage = Literal["available", "stockout", "unknown", "uncovered"]
+ExceptionCoverage = Literal["stockout", "unknown", "uncovered"]
 Quantity = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)]
 Count = Annotated[int, Field(ge=0)]
 UtcDatetime = Annotated[AwareDatetime, AfterValidator(lambda value: value.astimezone(timezone.utc))]
@@ -73,7 +74,7 @@ class InventoryExceptionRow(BaseModel):
     sku: str
     warehouse: str
     reference_date: date
-    coverage: Literal["stockout", "unknown", "uncovered"]
+    coverage: ExceptionCoverage
     reason: str
     source: Literal["firebird"] = "firebird"
     batch_id: str

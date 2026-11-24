@@ -11,9 +11,12 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.catalog import PaginatedResponse, ProductOut
 from app.schemas.inventory import MovementOut
-from app.schemas.reports import ComparisonRow, ImportedHistoryRow, ModelSource, ReplenishmentRow, VersionedReport
+from app.schemas.reports import (
+    ComparisonRow, ExceptionCoverage, ImportedHistoryRow, InventoryExceptionRow,
+    ModelSource, ReplenishmentRow, VersionedReport,
+)
 from app.services.inventory_service import list_movements
-from app.services.legacy_reports import LegacyScope, export_imported_history, imported_history
+from app.services.legacy_reports import LegacyScope, export_imported_history, imported_history, inventory_exceptions
 from app.services.replenishment_reports import stored_comparison, stored_replenishment
 from app.services.report_service import (
     export_below_minimum_csv,
@@ -55,6 +58,19 @@ def report_imported_history(
         rows = export_imported_history(db.get_bind(), scope, event_type)
         return stream_report_csv(ImportedHistoryRow, rows, "relatorio_historico_importado.csv")
     return imported_history(db, scope, event_type, page, page_size)
+
+
+@router.get("/inventory-exceptions", response_model=VersionedReport[InventoryExceptionRow])
+def report_inventory_exceptions(
+    _admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    scope: Annotated[LegacyScope, Depends(legacy_report_scope)],
+    coverage: ExceptionCoverage | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+) -> VersionedReport[InventoryExceptionRow]:
+    """Mostra rupturas confirmadas, dias sem cobertura e disponibilidade desconhecida."""
+    return inventory_exceptions(db, scope, coverage, page, page_size)
 
 
 @router.get("/replenishment", response_model=VersionedReport[ReplenishmentRow])

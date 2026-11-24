@@ -33,6 +33,7 @@ def legacy_report_data(db_session):
     """), {"id": product.id})
     db_session.commit()
     yield product.id
+    db_session.execute(text("DELETE FROM legacy_coverage_ranges WHERE batch_id = 'report-test-batch'"))
     db_session.execute(text("DELETE FROM legacy_history_events WHERE batch_id = 'report-test-batch'"))
     db_session.execute(text("DELETE FROM legacy_import_batches WHERE batch_id = 'report-test-batch'"))
     db_session.commit()
@@ -60,3 +61,32 @@ def test_history_filters_and_csv_share_rows_and_precision(
     assert export.status_code == 200
     rows = list(csv.DictReader(io.StringIO(export.content.decode("utf-8-sig"))))
     assert rows == [{key: "" if value is None else str(value) for key, value in row.items()} for row in items]
+
+
+def test_exceptions_distinguish_real_statuses_and_clip_date_ranges(
+    client, db_session, admin_headers, operator_headers, legacy_report_data
+):
+    db_session.execute(text("""
+        INSERT INTO legacy_coverage_ranges (warehouse_key, product_id, start_date, end_date, day_status, batch_id)
+        VALUES
+            ('test-warehouse', :id, DATE '2025-07-01', DATE '2025-07-21', 'zero_unknown_availability', 'report-test-batch'),
+            ('test-warehouse', :id, DATE '2025-07-22', DATE '2025-07-22', 'known_stockout', 'report-test-batch'),
+            ('test-warehouse', :id, DATE '2025-07-23', DATE '2025-07-23', 'calendar_gap', 'report-test-batch'),
+            ('test-warehouse', :id, DATE '2025-07-24', DATE '2025-07-24', 'sale', 'report-test-batch')
+    """), {"id": legacy_report_data})
+    db_session.commit()
+    path = "/api/reports/inventory-exceptions"
+    params = {"start_date": "2025-07-20", "page_size": 2}
+    assert client.get(path, headers=operator_headers).status_code == 403
+    first = client.get(path, params=params, headers=admin_headers).json()
+    assert first["total"] == 4
+    assert [(row["reference_date"], row["coverage"]) for row in first["items"]] == [
+        ("2025-07-23", "uncovered"), ("2025-07-22", "stockout"),
+    ]
+    next_page = client.get(path, params={**params, "page": 2}, headers=admin_headers).json()
+    assert [(row["reference_date"], row["coverage"]) for row in next_page["items"]] == [
+        ("2025-07-21", "unknown"), ("2025-07-20", "unknown"),
+    ]
+    unknown = client.get(path, params={**params, "coverage": "unknown"}, headers=admin_headers).json()
+    assert unknown["total"] == 2
+    assert all(row["source_date"] is None and row["source"] == "firebird" for row in unknown["items"])
