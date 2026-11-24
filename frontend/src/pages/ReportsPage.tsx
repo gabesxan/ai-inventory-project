@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Download, RotateCcw } from "lucide-react";
 import { ImportedHistoryTabPanel } from "../components/ImportedHistoryTabPanel";
+import { InventoryExceptionsTabPanel } from "../components/InventoryExceptionsTabPanel";
 import { Pagination } from "../components/Pagination";
 import { ReplenishmentTabPanel } from "../components/ReplenishmentTabPanel";
 import {
@@ -31,6 +32,7 @@ export type ReportTab =
   | "below-minimum"
   | "movements"
   | "imported-history"
+  | "exceptions"
   | "replenishment";
 
 const REPORT_TABS: Array<{ id: ReportTab; label: string; supportsHeaderCsv: boolean }> = [
@@ -38,6 +40,7 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; supportsHeaderCsv: bool
   { id: "below-minimum", label: "Abaixo do Mínimo", supportsHeaderCsv: true },
   { id: "movements", label: "Movimentações", supportsHeaderCsv: true },
   { id: "imported-history", label: "Histórico Importado", supportsHeaderCsv: false },
+  { id: "exceptions", label: "Exceções", supportsHeaderCsv: false },
   { id: "replenishment", label: "Reposição", supportsHeaderCsv: false },
 ];
 
@@ -47,6 +50,7 @@ function parseTabParam(raw: string | null): ReportTab {
     raw === "below-minimum" ||
     raw === "movements" ||
     raw === "imported-history" ||
+    raw === "exceptions" ||
     raw === "replenishment"
   ) {
     return raw;
@@ -120,6 +124,7 @@ export function ReportsPage() {
     "below-minimum": 1,
     movements: 1,
     "imported-history": 1,
+    exceptions: 1,
     replenishment: 1,
   });
 
@@ -192,6 +197,7 @@ export function ReportsPage() {
           end_date: movementFilters.end_date || undefined,
         };
       case "imported-history":
+      case "exceptions":
       case "replenishment":
         return {};
     }
@@ -210,13 +216,14 @@ export function ReportsPage() {
         setMovementFilters(DEFAULT_MOVEMENTS_FILTERS);
         break;
       case "imported-history":
+      case "exceptions":
       case "replenishment":
         break;
     }
   };
 
   const loadReport = useCallback(async () => {
-    if (tab === "replenishment" || tab === "imported-history") {
+    if (tab === "replenishment" || tab === "imported-history" || tab === "exceptions") {
       setLoading(false);
       return;
     }
@@ -356,6 +363,8 @@ export function ReportsPage() {
             initialWarehouse={initialWarehouseParam}
             onExportFeedback={setExportFeedback}
           />
+        ) : tab === "exceptions" ? (
+          <InventoryExceptionsTabPanel />
         ) : (
           <>
         <div className="filters-bar">
