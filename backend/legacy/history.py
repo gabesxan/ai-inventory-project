@@ -52,6 +52,7 @@ AVAILABLE_ON = {"pos_sale", "invoice_sale"}
 REASONS = (
     "missing_record_key", "unknown_product", "product_unknown_unit", "invalid_date", "invalid_quantity",
     "unknown_event_type", "document_does_not_move_stock", "receipt_quantity_unavailable",
+    "product_not_in_catalog",
 )
 
 
@@ -61,12 +62,16 @@ class StagedInputs:
     events: Path
     receipts: Path
     receipt_lines: Optional[Path] = None
+    series_index: Optional[Path] = None   # DB-12 per-series coverage summary
+    series: Optional[Path] = None         # DB-12 day-level series (.csv.gz)
 
     @classmethod
     def from_out_dir(cls, out: Path) -> "StagedInputs":
-        lines = out / "db09" / "receipt_lines.csv"
-        return cls(out / "db05" / "products.csv", out / "db07" / "events.csv",
-                   out / "db09" / "stock_receipts.csv", lines if lines.is_file() else None)
+        def opt(p: Path) -> Optional[Path]:
+            return p if p.is_file() else None
+        return cls(out / "db05" / "products.csv", out / "db07" / "events.csv", out / "db09" / "stock_receipts.csv",
+                   opt(out / "db09" / "receipt_lines.csv"), opt(out / "db12" / "series_index.csv"),
+                   opt(out / "db12" / "series.csv.gz"))
 
 
 @dataclass(frozen=True)

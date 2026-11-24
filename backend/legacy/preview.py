@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from legacy.history import HistoryRow, Rejection, StagedInputs, read_history
-from legacy.identity import SourceInstance
+from legacy.identity import SourceInstance, location_key
 from legacy.manifest import ManifestError, load_ready
 
 MAX_DIAGNOSTICS = 200
@@ -51,7 +51,7 @@ def _sha256(p: Path) -> str:
 def fingerprint(extract_dir: Path, staged: StagedInputs) -> str:
     """Identity of the exact extract and staged inputs; the same files always give the same value."""
     parts = [_sha256(extract_dir / "manifest.json")]
-    for p in (staged.products, staged.events, staged.receipts, staged.receipt_lines):
+    for p in (staged.products, staged.events, staged.receipts, staged.receipt_lines, staged.series_index, staged.series):
         if p is not None:
             parts.append(_sha256(p))
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
@@ -137,7 +137,7 @@ def _main(argv: List[str]) -> int:
     ap.add_argument("--pg-db", default=None)
     a = ap.parse_args(argv)
     inst = SourceInstance(branch=a.branch)
-    warehouse = f"{inst.tag}/local/{a.branch}"
+    warehouse = location_key(inst, a.branch)
     conn = None
     if a.pg_db:
         import psycopg
