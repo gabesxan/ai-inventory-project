@@ -1,4 +1,4 @@
-"""Eligibility for legacy calibration, separate from the synthetic worker."""
+"""Calibration windows and eligibility for imported inventory history."""
 
 import argparse
 import json
@@ -24,6 +24,7 @@ TEST_DAYS = 14
 class CalibrationDay:
     day: date
     demand: int
+    opening_stock: int | None = None
 
 
 @dataclass(frozen=True)
@@ -35,11 +36,12 @@ class CalibrationPlan:
     calibration: tuple[CalibrationDay, ...]
     validation: tuple[CalibrationDay, ...]
     test: tuple[CalibrationDay, ...]
+    availability_basis: str = VERIFIED_BASIS
 
 
 def make_plan(
     sku: str, warehouse: str, days: list[CalibrationDay], measured: tuple[int, ...] = (),
-    configured: int | None = None,
+    configured: int | None = None, *, availability_basis: str = VERIFIED_BASIS,
 ) -> tuple[CalibrationPlan | None, str]:
     """Choose the latest contiguous complete period without filling gaps."""
     required = CALIBRATION_DAYS + VALIDATION_DAYS + TEST_DAYS
@@ -65,7 +67,7 @@ def make_plan(
         sku=sku, warehouse=warehouse, lead_time_days=lead_time, lead_time_source=source,
         calibration=tuple(selected[:CALIBRATION_DAYS]),
         validation=tuple(selected[CALIBRATION_DAYS:-TEST_DAYS]),
-        test=tuple(selected[-TEST_DAYS:]),
+        test=tuple(selected[-TEST_DAYS:]), availability_basis=availability_basis,
     ), "eligible"
 
 

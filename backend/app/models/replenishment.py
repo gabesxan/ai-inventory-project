@@ -12,7 +12,7 @@ from app.database import Base
 class ReplenishmentRun(Base):
     __tablename__ = "replenishment_runs"
     __table_args__ = (
-        CheckConstraint("source IN ('synthetic', 'legacy_calibrated')", name="ck_replenishment_run_source"),
+        CheckConstraint("source IN ('synthetic', 'legacy_calibrated', 'operational_calibrated')", name="ck_replenishment_run_source"),
         Index("ix_replenishment_run_scope_config", "sku", "warehouse", "config_sha256", "trained_at"),
     )
 

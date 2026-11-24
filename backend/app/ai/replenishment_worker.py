@@ -1,4 +1,4 @@
-"""Publish synthetic DQN recommendations from a separate local process."""
+"""Publish DQN recommendations from a separate local process."""
 
 import argparse
 import hashlib
@@ -9,15 +9,15 @@ from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.ai.calibration import VERIFIED_BASIS, CalibrationDay, CalibrationPlan, assess
+from app.ai.calibration import CalibrationDay, CalibrationPlan, assess
 from app.ai.dqn import MODEL_VERSION, TrainingConfig, load_checkpoint, save_checkpoint, train_demo, train_dqn
 from app.ai.evaluation import evaluate, evaluate_episodes
+from app.ai.operational_calibration import BUSINESS_ZONE, assess_operational
 from app.ai.publication import publish, record_status
 from app.ai.scenarios import DEMO_INVENTORY, DEMO_SCENARIOS, TRAIN_SEEDS, Episode, Scenario
 from app.ai.simulator import Observation
@@ -30,7 +30,6 @@ from app.schemas.reports import ModelSource, ReplenishmentRow
 
 LOG = logging.getLogger(__name__)
 LOCK_ID = 605288143401
-BUSINESS_ZONE = ZoneInfo("America/Sao_Paulo")
 
 
 @dataclass(frozen=True)
@@ -40,11 +39,13 @@ class WorkerConfig:
     checkpoint_dir: Path
     revision: str
     seed: int = 42
-    pipeline: tuple[int, ...] | None = (0,) * DEMO_INVENTORY.max_lead_time
+    pipeline: tuple[int, ...] | None = None
     source: ModelSource = "synthetic"
     configured_lead_time: int | None = None
 
     def __post_init__(self):
+        if self.source == "synthetic" and self.pipeline is None:
+            object.__setattr__(self, "pipeline", (0,) * DEMO_INVENTORY.max_lead_time)
         if self.pipeline is not None and any(qty < 0 for qty in self.pipeline):
             raise ValueError("Pipeline quantities must be nonnegative")
         if self.source == "synthetic" and (
@@ -57,8 +58,9 @@ def _fingerprint(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
-def _read_product(db: Session, sku: str) -> Product | None:
-    return db.scalar(select(Product).where(Product.sku == sku).execution_options(populate_existing=True))
+def _read_product(db: Session, sku: str, *, lock: bool = False) -> Product | None:
+    query = select(Product).where(Product.sku == sku).execution_options(populate_existing=True)
+    return db.scalar(query.with_for_update() if lock else query)
 
 
 def _eligible(product: Product | None) -> bool:
@@ -81,18 +83,26 @@ def _inputs(product: Product, pipeline: tuple[int, ...], reference_date: date) -
     })
 
 
-def _legacy_episode(name: str, days: tuple[CalibrationDay, ...], lead_time: int) -> Episode:
+def _chronological_episode(
+    name: str, days: tuple[CalibrationDay, ...], lead_time: int, scenario: str,
+) -> Episode:
+    opening_stock = days[0].opening_stock
     return Episode(
         run_id=f"{name}/{days[0].day.isoformat()}", seed=days[0].day.toordinal(),
-        scenario="legacy_chronological", demand=tuple(day.demand for day in days),
-        lead_times=(lead_time,) * len(days), initial_stock=DEMO_SCENARIOS[0].initial_stock,
+        scenario=scenario, demand=tuple(day.demand for day in days),
+        lead_times=(lead_time,) * len(days),
+        initial_stock=DEMO_SCENARIOS[0].initial_stock if opening_stock is None else opening_stock,
     )
 
 
-def _train_calibrated(path: Path, plan: CalibrationPlan, training: TrainingConfig, revision: str):
+def _train_calibrated(
+    path: Path, plan: CalibrationPlan, training: TrainingConfig, revision: str, source: ModelSource,
+):
+    prefix = "operational" if source == "operational_calibrated" else "legacy"
+    scenario_name = f"{prefix}_chronological"
     inventory = replace(DEMO_INVENTORY, max_lead_time=plan.lead_time_days)
     scenario = Scenario(
-        "legacy_fitted", len(plan.calibration),
+        f"{prefix}_fitted", len(plan.calibration),
         sum(day.demand for day in plan.calibration) / len(plan.calibration),
         plan.lead_time_days, plan.lead_time_days,
     )
@@ -103,16 +113,20 @@ def _train_calibrated(path: Path, plan: CalibrationPlan, training: TrainingConfi
         "calibration_end": plan.calibration[-1].day.isoformat(),
         "lead_time_days": plan.lead_time_days,
         "lead_time_source": plan.lead_time_source,
-        "availability_basis": VERIFIED_BASIS,
+        "availability_basis": plan.availability_basis,
     }
+    if source == "operational_calibrated":
+        calibration["evaluation_initial_pipeline"] = "empty_simulated"
+        calibration["validation_initial_stock"] = plan.validation[0].opening_stock
+        calibration["test_initial_stock"] = plan.test[0].opening_stock
     metadata = save_checkpoint(
-        path, policy, training, episodes, updates, source="legacy_calibrated",
+        path, policy, training, episodes, updates, source=source,
         scenarios=(scenario,), calibration=calibration,
     )
     evaluation = evaluate_episodes(
         policy, metadata, revision,
-        [_legacy_episode("legacy_validation", plan.validation, plan.lead_time_days)],
-        [_legacy_episode("legacy_test", plan.test, plan.lead_time_days)],
+        [_chronological_episode(f"{prefix}_validation", plan.validation, plan.lead_time_days, scenario_name)],
+        [_chronological_episode(f"{prefix}_test", plan.test, plan.lead_time_days, scenario_name)],
     )
     return policy, metadata, evaluation
 
@@ -121,18 +135,22 @@ def _insufficient(db: Session, config: WorkerConfig, reason: str) -> str:
     state = db.get(ReplenishmentState, (config.sku, config.warehouse))
     current = db.get(ReplenishmentSnapshot, state.snapshot_id) if state and state.snapshot_id else None
     if current is None or current.payload.get("source") == config.source:
-        record_status(db, config.sku, config.warehouse, "insufficient_data", reason)
+        state = record_status(db, config.sku, config.warehouse, "insufficient_data", reason)
+        if config.source == "operational_calibrated":
+            state.snapshot_id = None
         db.commit()
     LOG.info("Calibration/input eligibility scope=%s source=%s reason=%s", config.sku, config.source, reason)
     return "insufficient_data"
 
 
 def _process(db: Session, config: WorkerConfig) -> str:
-    product = _read_product(db, config.sku)
+    operational = config.source == "operational_calibrated"
+    product = _read_product(db, config.sku, lock=operational)
     if not _eligible(product):
         return _insufficient(db, config, "missing_whole_unit_stock")
 
     reference_date = datetime.now(BUSINESS_ZONE).date()
+    source_version = (product.updated_at, reference_date)
     training = TrainingConfig(seed=config.seed)
     model_config = {
         "version": MODEL_VERSION,
@@ -155,14 +173,24 @@ def _process(db: Session, config: WorkerConfig) -> str:
         )
         if tracked_stock is None:
             return _insufficient(db, config, "unverified_operational_stock")
-        if config.pipeline is None or len(config.pipeline) != plan.lead_time_days:
-            return _insufficient(db, config, "pipeline_unavailable")
         model_config["legacy_history"] = [
             (day.day.isoformat(), day.demand) for day in (*plan.calibration, *plan.validation, *plan.test)
         ]
+        scenario_name = "legacy_chronological"
+    elif operational:
+        plan, reason = assess_operational(db, product, config.warehouse, reference_date, config.configured_lead_time)
+        if plan is None:
+            return _insufficient(db, config, reason)
+        model_config["operational_history"] = [
+            (day.day.isoformat(), day.demand, day.opening_stock)
+            for day in (*plan.calibration, *plan.validation, *plan.test)
+        ]
+        scenario_name = "operational_chronological"
+    if plan is not None:
+        if config.pipeline is None or len(config.pipeline) != plan.lead_time_days:
+            return _insufficient(db, config, "pipeline_unavailable")
         model_config["lead_time_days"] = plan.lead_time_days
         model_config["lead_time_source"] = plan.lead_time_source
-        scenario_name = "legacy_chronological"
     model_hash = _fingerprint(model_config)
     run = db.scalar(
         select(ReplenishmentRun)
@@ -197,7 +225,7 @@ def _process(db: Session, config: WorkerConfig) -> str:
             policy, metadata = train_demo(path, config.seed)
             evaluation = evaluate(policy, metadata, config.revision)
         else:
-            policy, metadata, evaluation = _train_calibrated(path, plan, training, config.revision)
+            policy, metadata, evaluation = _train_calibrated(path, plan, training, config.revision, config.source)
         run = ReplenishmentRun(
             id=run_id, sku=config.sku, warehouse=config.warehouse,
             source=metadata["source"], model_version=metadata["model_version"],
@@ -207,10 +235,14 @@ def _process(db: Session, config: WorkerConfig) -> str:
             evaluation=evaluation,
         )
 
-    product = _read_product(db, config.sku)
+    product = _read_product(db, config.sku, lock=operational)
     if not _eligible(product):
         return _insufficient(db, config, "missing_whole_unit_stock")
     reference_date = datetime.now(BUSINESS_ZONE).date()
+    if operational and (product.updated_at, reference_date) != source_version:
+        if not can_reuse:
+            path.unlink(missing_ok=True)
+        return _insufficient(db, config, "operational_inputs_changed")
     input_hash = _inputs(product, config.pipeline, reference_date)
     recommendation = policy(Observation(int(product.current_stock), config.pipeline))
     row = ReplenishmentRow(
@@ -255,17 +287,19 @@ def main() -> int:
     parser.add_argument("--checkpoints", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--source", choices=("synthetic", "legacy_calibrated"), default="synthetic")
-    parser.add_argument("--lead-time-days", type=int, help="Explicit configured delay for eligible legacy history")
+    parser.add_argument(
+        "--source", choices=("synthetic", "legacy_calibrated", "operational_calibrated"), default="synthetic",
+    )
+    parser.add_argument("--lead-time-days", type=int, help="Explicit configured delay for eligible calibrated history")
     parser.add_argument("--pipeline", type=int, nargs="+", help="Known or simulated units per due day")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     if args.interval < 1:
         parser.error("--interval must be positive")
+    if args.source == "operational_calibrated" and not args.once:
+        parser.error("Operational calibration requires --once and a fresh pipeline for each execution")
     pipeline = tuple(args.pipeline) if args.pipeline is not None else None
-    if args.source == "synthetic" and pipeline is None:
-        pipeline = (0,) * DEMO_INVENTORY.max_lead_time
     config = WorkerConfig(
         args.sku.strip().upper(), args.warehouse.strip(), args.checkpoints, args.revision, args.seed,
         pipeline, args.source, args.lead_time_days,
