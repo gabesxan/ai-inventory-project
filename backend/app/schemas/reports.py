@@ -10,7 +10,7 @@ from app.schemas.catalog import PaginatedResponse
 
 
 ReportStatus = Literal["ready", "calculating", "insufficient_data", "stale", "empty"]
-ModelSource = Literal["synthetic", "legacy_calibrated"]
+ModelSource = Literal["synthetic", "legacy_calibrated", "operational_calibrated"]
 Coverage = Literal["available", "stockout", "unknown", "uncovered"]
 ExceptionCoverage = Literal["stockout", "unknown", "uncovered"]
 Quantity = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)]

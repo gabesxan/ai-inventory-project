@@ -43,6 +43,7 @@ function formatPolicyLabel(policy: ComparisonRow["policy"]): string {
 }
 
 function formatSourceLabel(source: ModelSource): string {
+  if (source === "operational_calibrated") return "Histórico operacional calibrado";
   return source === "synthetic"
     ? "Simulação acadêmica"
     : "Histórico legado calibrado";
@@ -180,11 +181,8 @@ export function PolicyComparisonSection() {
       }
     }
     const list = Array.from(map.values());
-    // Separate legacy_calibrated and synthetic deterministically
     list.sort((a, b) => {
-      if (a.source !== b.source) {
-        return a.source === "legacy_calibrated" ? -1 : 1;
-      }
+      if (a.source !== b.source) return a.source.localeCompare(b.source);
       if (a.scenario !== b.scenario) return a.scenario.localeCompare(b.scenario);
       return a.model_run_id.localeCompare(b.model_run_id);
     });
@@ -249,6 +247,7 @@ export function PolicyComparisonSection() {
             <option value="">Todas as origens</option>
             <option value="synthetic">Simulação acadêmica</option>
             <option value="legacy_calibrated">Histórico legado calibrado</option>
+            <option value="operational_calibrated">Histórico operacional calibrado</option>
           </select>
         </div>
         <div className="form-field" style={{ flex: "1 1 180px" }}>
@@ -335,7 +334,7 @@ export function PolicyComparisonSection() {
                   <div className="comparison-group-title">
                     <span
                       className={`badge ${
-                        group.source === "legacy_calibrated"
+                        group.source !== "synthetic"
                           ? "badge-info"
                           : "badge-neutral"
                       }`}

@@ -23,6 +23,7 @@ const DEFAULT_FILTERS: ReplenishmentFilters = {
 };
 
 function formatModelOrigin(source: ReplenishmentRow["source"]): string {
+  if (source === "operational_calibrated") return "Histórico operacional calibrado";
   return source === "synthetic"
     ? "Simulação acadêmica"
     : "Histórico legado calibrado";

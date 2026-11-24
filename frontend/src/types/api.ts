@@ -273,7 +273,7 @@ export type ReportStatus =
   | "stale"
   | "empty";
 
-export type ModelSource = "synthetic" | "legacy_calibrated";
+export type ModelSource = "synthetic" | "legacy_calibrated" | "operational_calibrated";
 
 export type CoverageStatus =
   | "available"
