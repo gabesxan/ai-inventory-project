@@ -92,6 +92,7 @@ export function PolicyComparisonSection() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const buildParams = useCallback(
@@ -131,11 +132,15 @@ export function PolicyComparisonSection() {
   const handleExportCsv = async () => {
     setExporting(true);
     setError(null);
+    setExportFeedback(null);
     try {
       const qs = buildQueryString({ ...buildParams(), export: "csv" });
       await downloadAuthenticatedFile(
         `/reports/comparison${qs}`,
         "relatorio_comparacao_politicas.csv"
+      );
+      setExportFeedback(
+        "CSV da comparação entre políticas exportado com os filtros e precisão originais."
       );
     } catch (err) {
       setError(
@@ -282,6 +287,12 @@ export function PolicyComparisonSection() {
         </button>
       </div>
 
+      {exportFeedback ? (
+        <div className="alert alert-success" role="status" data-testid="comparison-export-feedback">
+          {exportFeedback}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="alert alert-error" role="alert">
           {error}
@@ -345,7 +356,12 @@ export function PolicyComparisonSection() {
                   </div>
                 </div>
 
-                <div className="table-wrap">
+                <div
+                  className="table-wrap"
+                  role="region"
+                  aria-label={`Resumo da comparação de políticas para ${group.scenario}`}
+                  tabIndex={0}
+                >
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -433,7 +449,12 @@ export function PolicyComparisonSection() {
                       </span>
                     </div>
 
-                    <div className="table-wrap">
+                    <div
+                      className="table-wrap"
+                      role="region"
+                      aria-label={`Detalhes por seed para ${group.scenario}`}
+                      tabIndex={0}
+                    >
                       <table className="data-table">
                         <thead>
                           <tr>

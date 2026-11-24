@@ -231,7 +231,15 @@ export function ReplenishmentTabPanel() {
             </div>
           ) : null}
 
-          <div className="table-wrap">
+          <div className="table-scroll-hint" aria-hidden="true">
+            Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+          </div>
+          <div
+            className="table-wrap"
+            role="region"
+            aria-label="Tabela de sugestões de reposição"
+            tabIndex={0}
+          >
             <table className="data-table">
               <thead>
                 <tr>

@@ -925,9 +925,21 @@ textarea {
 .table-wrap {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface-primary);
+}
+
+.table-wrap:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.table-scroll-hint {
+  display: none;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
 }
 
 table.data-table {
@@ -1502,6 +1514,10 @@ table.data-table th.td-numeric,
 }
 
 @media (max-width: 640px) {
+  .table-scroll-hint {
+    display: block;
+  }
+
   .topbar-group,
   .topbar-sep,
   .topbar-context-pill {

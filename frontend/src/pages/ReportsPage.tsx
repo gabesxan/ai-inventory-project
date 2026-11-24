@@ -598,7 +598,19 @@ export function ReportsPage() {
             </div>
           ) : (
             <>
-              <div className="table-wrap">
+              <div className="table-scroll-hint" aria-hidden="true">
+                Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+              </div>
+              <div
+                className="table-wrap"
+                role="region"
+                aria-label={
+                  tab === "current-stock"
+                    ? "Tabela de estoque atual"
+                    : "Tabela de produtos abaixo do mínimo"
+                }
+                tabIndex={0}
+              >
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -665,7 +677,15 @@ export function ReportsPage() {
             </div>
           ) : (
             <>
-              <div className="table-wrap">
+              <div className="table-scroll-hint" aria-hidden="true">
+                Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+              </div>
+              <div
+                className="table-wrap"
+                role="region"
+                aria-label="Tabela de histórico de movimentações"
+                tabIndex={0}
+              >
                 <table className="data-table">
                   <thead>
                     <tr>
