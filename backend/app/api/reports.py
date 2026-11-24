@@ -11,7 +11,9 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.catalog import PaginatedResponse, ProductOut
 from app.schemas.inventory import MovementOut
+from app.schemas.reports import ReplenishmentRow, VersionedReport
 from app.services.inventory_service import list_movements
+from app.services.replenishment_reports import stored_replenishment
 from app.services.report_service import (
     export_below_minimum_csv,
     export_current_stock_csv,
@@ -22,6 +24,19 @@ from app.services.report_service import (
 
 
 router = APIRouter(prefix="/reports", tags=["Relatórios"])
+
+
+@router.get("/replenishment", response_model=VersionedReport[ReplenishmentRow])
+def report_replenishment(
+    _admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    sku: str | None = Query(default=None, min_length=1, max_length=64),
+    warehouse: str | None = Query(default=None, min_length=1, max_length=64),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+) -> VersionedReport[ReplenishmentRow]:
+    """Lê as sugestões persistidas pelo processo de reposição."""
+    return stored_replenishment(db, sku, warehouse, page, page_size)
 
 
 @router.get("/current-stock")
