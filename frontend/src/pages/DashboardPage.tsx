@@ -508,22 +508,34 @@ export function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Produto</th>
-                      <th className="td-numeric">Saldo Atual</th>
-                      <th className="td-numeric">Mínimo</th>
-                      <th className="td-numeric">Déficit</th>
-                      <th>Fornecedor / Prazo</th>
-                      <th>Situação</th>
-                      <th>Ação Rápida</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.replenishment_list.map((item) => (
+              <>
+                {data.replenishment_list.length > 20 ? (
+                  <p className="page-subtitle" style={{ marginBottom: 12 }}>
+                    Exibindo os <strong>20</strong> primeiros itens prioritários de{" "}
+                    <strong>{data.replenishment_list.length}</strong> retornados pelo painel.
+                  </p>
+                ) : null}
+                <div
+                  className="table-wrap"
+                  role="region"
+                  aria-label="Itens prioritários para reposição"
+                  tabIndex={0}
+                >
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Produto</th>
+                        <th className="td-numeric">Saldo Atual</th>
+                        <th className="td-numeric">Mínimo</th>
+                        <th className="td-numeric">Déficit</th>
+                        <th>Fornecedor / Prazo</th>
+                        <th>Situação</th>
+                        <th>Ação Rápida</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.replenishment_list.slice(0, 20).map((item) => (
                       <tr key={item.product_id}>
                         <td className="mono">{item.sku}</td>
                         <td>
@@ -577,6 +589,7 @@ export function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </section>
         </>
