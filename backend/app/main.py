@@ -9,6 +9,7 @@ from app.api import (
     auth,
     categories,
     dashboard,
+    legacy_imports,
     movements,
     products,
     reports,
@@ -55,3 +56,4 @@ app.include_router(movements.router, prefix=settings.API_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_PREFIX)
 app.include_router(reports.router, prefix=settings.API_PREFIX)
 app.include_router(ai.router, prefix=settings.API_PREFIX)
+app.include_router(legacy_imports.router, prefix=settings.API_PREFIX)
