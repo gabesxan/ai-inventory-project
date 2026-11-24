@@ -1017,6 +1017,78 @@ table.data-table th.td-numeric,
   color: var(--ink-muted);
 }
 
+/* Comparação de políticas (FE-12) */
+.comparison-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-default);
+}
+
+.comparison-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.comparison-header h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--ink-primary);
+}
+
+.comparison-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.comparison-group-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  padding: var(--space-4);
+}
+
+.comparison-group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+.comparison-group-title,
+.comparison-group-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-meta-sep {
+  color: var(--border-strong);
+}
+
+.comparison-expand-bar {
+  margin-top: var(--space-3);
+  display: flex;
+  justify-content: flex-start;
+}
+
+.comparison-details-box {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
 .td-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Pagination } from "./Pagination";
+import { PolicyComparisonSection } from "./PolicyComparisonSection";
 import { apiRequest, ApiError, buildQueryString } from "../services/api";
 import type { ReplenishmentRow, VersionedReport } from "../types/api";
 import {
@@ -288,6 +289,8 @@ export function ReplenishmentTabPanel() {
           />
         </>
       )}
+
+      <PolicyComparisonSection />
     </div>
   );
 }
