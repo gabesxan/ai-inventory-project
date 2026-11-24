@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -11,8 +11,9 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.catalog import PaginatedResponse, ProductOut
 from app.schemas.inventory import MovementOut
-from app.schemas.reports import ComparisonRow, ModelSource, ReplenishmentRow, VersionedReport
+from app.schemas.reports import ComparisonRow, ImportedHistoryRow, ModelSource, ReplenishmentRow, VersionedReport
 from app.services.inventory_service import list_movements
+from app.services.legacy_reports import LegacyScope, export_imported_history, imported_history
 from app.services.replenishment_reports import stored_comparison, stored_replenishment
 from app.services.report_service import (
     export_below_minimum_csv,
@@ -21,10 +22,39 @@ from app.services.report_service import (
     get_below_minimum_report,
     get_current_stock_report,
 )
-from app.services.versioned_reports import report_csv, report_page
+from app.services.versioned_reports import report_csv, report_page, stream_report_csv
 
 
 router = APIRouter(prefix="/reports", tags=["Relatórios"])
+
+
+def legacy_report_scope(
+    sku: str | None = Query(default=None, min_length=1, max_length=64),
+    warehouse: str | None = Query(default=None, min_length=1, max_length=120),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+) -> LegacyScope:
+    if start_date is not None and end_date is not None and start_date > end_date:
+        raise HTTPException(422, detail="A data inicial deve ser anterior ou igual à data final.")
+    return LegacyScope(sku=sku, warehouse=warehouse, start_date=start_date, end_date=end_date)
+
+
+@router.get("/imported-history", response_model=VersionedReport[ImportedHistoryRow])
+def report_imported_history(
+    _admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    scope: Annotated[LegacyScope, Depends(legacy_report_scope)],
+    source: Literal["firebird"] | None = Query(default=None),
+    event_type: str | None = Query(default=None, min_length=1, max_length=40),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    export: Literal["json", "csv"] = Query(default="json"),
+):
+    """Lista eventos do legado Firebird, com filtros e exportação."""
+    if export == "csv":
+        rows = export_imported_history(db.get_bind(), scope, event_type)
+        return stream_report_csv(ImportedHistoryRow, rows, "relatorio_historico_importado.csv")
+    return imported_history(db, scope, event_type, page, page_size)
 
 
 @router.get("/replenishment", response_model=VersionedReport[ReplenishmentRow])

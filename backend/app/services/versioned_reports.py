@@ -1,9 +1,13 @@
 """Pagination and CSV serialization for the shared report row contracts."""
 
+import csv
+import io
 import json
+from collections.abc import Iterator
 from typing import TypeVar
 
 from fastapi import Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.schemas.reports import VersionedReport
@@ -35,5 +39,31 @@ def report_csv(row_type: type[Row], rows: list[Row], filename: str) -> Response:
     return Response(
         content=build_csv_bytes(headers, values),
         media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def stream_report_csv(row_type: type[Row], rows: Iterator[Row], filename: str) -> StreamingResponse:
+    headers = list(row_type.model_fields)
+
+    def encode():
+        with io.StringIO() as buffer:
+            writer = csv.writer(buffer)
+            writer.writerow(headers)
+            yield buffer.getvalue().encode("utf-8-sig")
+            buffer.seek(0)
+            buffer.truncate()
+            for row in rows:
+                data = row.model_dump(mode="json")
+                writer.writerow(data[key] for key in headers)
+                if buffer.tell() >= 32_768:
+                    yield buffer.getvalue().encode("utf-8")
+                    buffer.seek(0)
+                    buffer.truncate()
+            if buffer.tell():
+                yield buffer.getvalue().encode("utf-8")
+
+    return StreamingResponse(
+        encode(), media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

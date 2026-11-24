@@ -4,7 +4,7 @@ The new routes below use the existing `/api` prefix and bearer authentication. E
 
 | Method and path | Row schema | Filters |
 | --- | --- | --- |
-| GET `/api/reports/imported-history` | `ImportedHistoryRow` | `start_date`, `end_date`, `sku`, `warehouse`, `event_type` |
+| GET `/api/reports/imported-history` | `ImportedHistoryRow` | `start_date`, `end_date`, `sku`, `warehouse`, `event_type`, `source` (`firebird`) |
 | GET `/api/reports/replenishment` | `ReplenishmentRow` | `sku`, `warehouse` |
 | GET `/api/reports/comparison` | `ComparisonRow` | `source`, `model_run_id`, `scenario` |
 | GET `/api/reports/inventory-exceptions` | `InventoryExceptionRow` | `start_date`, `end_date`, `sku`, `warehouse`, `coverage` |
