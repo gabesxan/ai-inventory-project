@@ -1,11 +1,32 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Ban, CheckCircle2, Pencil, Plus } from "lucide-react";
+import {
+  Ban,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Shield,
+  User as UserIcon,
+} from "lucide-react";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { useAuth } from "../context/AuthContext";
 import { apiRequest, ApiError, buildQueryString } from "../services/api";
 import type { PaginatedResponse, User, UserRole } from "../types/api";
 import { formatDateTimeBR, translateRole } from "../utils/format";
+
+function formatPermissionAwareError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 403) {
+      return "Permissão insuficiente para esta ação. Apenas administradores autorizados podem gerenciar usuários.";
+    }
+    if (err.status === 404) {
+      return "Registro não encontrado ou indisponível para edição.";
+    }
+    return err.message;
+  }
+  return fallback;
+}
 
 export function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -42,9 +63,7 @@ export function UsersPage() {
       setTotal(res.total);
       setTotalPages(res.total_pages);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Erro ao carregar usuários."
-      );
+      setError(formatPermissionAwareError(err, "Erro ao carregar usuários."));
     } finally {
       setLoading(false);
     }
@@ -118,9 +137,10 @@ export function UsersPage() {
       setModalOpen(false);
       await loadUsers();
     } catch (err) {
-      setSubmitError(
-        err instanceof ApiError ? err.message : "Erro ao salvar usuário."
-      );
+      if (err instanceof ApiError && Object.keys(err.fieldErrors).length > 0) {
+        setFormErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+      }
+      setSubmitError(formatPermissionAwareError(err, "Erro ao salvar usuário."));
     } finally {
       setSaving(false);
     }
@@ -138,9 +158,7 @@ export function UsersPage() {
       );
       await loadUsers();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Erro ao atualizar status."
-      );
+      setError(formatPermissionAwareError(err, "Erro ao atualizar status."));
     }
   };
 
@@ -155,18 +173,26 @@ export function UsersPage() {
         </div>
         <div className="header-actions">
           <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <Plus size={16} />
+            <Plus size={16} aria-hidden="true" />
             <span>Novo Usuário</span>
           </button>
         </div>
       </div>
 
-      {feedback ? <div className="alert alert-success">{feedback}</div> : null}
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {feedback ? (
+        <div className="alert alert-success" role="status">
+          {feedback}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="alert alert-error" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       <div className="card">
         <div className="filters-bar">
-          <div className="form-field" style={{ maxWidth: 360, width: "100%" }}>
+          <div className="form-field" style={{ flex: "1 1 260px", maxWidth: 380 }}>
             <label htmlFor="usr-search">Pesquisar (nome ou e-mail)</label>
             <input
               id="usr-search"
@@ -180,6 +206,18 @@ export function UsersPage() {
               placeholder="Filtrar usuários..."
             />
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!search}
+            onClick={() => {
+              setSearch("");
+              setPage(1);
+            }}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            <span>Limpar busca</span>
+          </button>
         </div>
 
         {loading ? (
@@ -188,27 +226,42 @@ export function UsersPage() {
           <div className="state-box">Nenhum usuário encontrado.</div>
         ) : (
           <>
-            <div className="table-wrap">
+            <div className="table-scroll-hint" aria-hidden="true">
+              Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
+            </div>
+            <div
+              className="table-wrap"
+              role="region"
+              aria-label="Tabela de usuários e permissões"
+              tabIndex={0}
+            >
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Nome</th>
                     <th>E-mail</th>
                     <th>Perfil</th>
-                    <th>Status</th>
+                    <th>Status da conta</th>
                     <th>Criado em</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={u.id}>
+                    <tr
+                      key={u.id}
+                      className={u.is_active ? undefined : "row-inactive"}
+                      data-user-status={u.is_active ? "active" : "inactive"}
+                    >
                       <td>
                         <strong>{u.name}</strong>
                         {currentUser?.id === u.id ? (
                           <span className="badge badge-info" style={{ marginLeft: 8 }}>
                             Você
                           </span>
+                        ) : null}
+                        {!u.is_active ? (
+                          <div className="cell-subtext">Acesso bloqueado (conta inativa)</div>
                         ) : null}
                       </td>
                       <td>{u.email}</td>
@@ -218,19 +271,34 @@ export function UsersPage() {
                             u.role === "ADMIN" ? "badge-info" : "badge-neutral"
                           }`}
                         >
-                          {translateRole(u.role)}
+                          {u.role === "ADMIN" ? (
+                            <Shield size={12} aria-hidden="true" />
+                          ) : (
+                            <UserIcon size={12} aria-hidden="true" />
+                          )}
+                          <span>{translateRole(u.role)}</span>
                         </span>
                       </td>
                       <td>
                         <span
                           className={`badge ${
-                            u.is_active ? "badge-success" : "badge-neutral"
+                            u.is_active ? "badge-success" : "badge-neutral badge-inactive"
                           }`}
                         >
-                          {u.is_active ? "Ativo" : "Inativo"}
+                          {u.is_active ? (
+                            <>
+                              <CheckCircle2 size={12} aria-hidden="true" />
+                              <span>Ativo</span>
+                            </>
+                          ) : (
+                            <>
+                              <Ban size={12} aria-hidden="true" />
+                              <span>Inativo</span>
+                            </>
+                          )}
                         </span>
                       </td>
-                      <td>{formatDateTimeBR(u.created_at)}</td>
+                      <td className="tabular-nums">{formatDateTimeBR(u.created_at)}</td>
                       <td>
                         <div className="td-actions">
                           <button
@@ -238,7 +306,7 @@ export function UsersPage() {
                             className="btn btn-secondary btn-sm"
                             onClick={() => openEdit(u)}
                           >
-                            <Pencil size={14} />
+                            <Pencil size={14} aria-hidden="true" />
                             <span>Editar</span>
                           </button>
                           {currentUser?.id !== u.id ? (
@@ -249,12 +317,12 @@ export function UsersPage() {
                             >
                               {u.is_active ? (
                                 <>
-                                  <Ban size={14} />
+                                  <Ban size={14} aria-hidden="true" />
                                   <span>Inativar</span>
                                 </>
                               ) : (
                                 <>
-                                  <CheckCircle2 size={14} />
+                                  <CheckCircle2 size={14} aria-hidden="true" />
                                   <span>Reativar</span>
                                 </>
                               )}
@@ -296,13 +364,17 @@ export function UsersPage() {
               className="btn btn-primary"
               disabled={saving}
             >
-              <CheckCircle2 size={16} />
+              <CheckCircle2 size={15} aria-hidden="true" />
               <span>{saving ? "Salvando..." : "Salvar Usuário"}</span>
             </button>
           </>
         }
       >
-        {submitError ? <div className="alert alert-error">{submitError}</div> : null}
+        {submitError ? (
+          <div className="alert alert-error" role="alert">
+            {submitError}
+          </div>
+        ) : null}
         <form id="user-form" onSubmit={handleSave} className="form-grid">
           <div className="form-field full">
             <label htmlFor="uf-name">Nome completo *</label>
@@ -310,11 +382,14 @@ export function UsersPage() {
               id="uf-name"
               type="text"
               className={`input ${formErrors.name ? "has-error" : ""}`}
+              aria-invalid={Boolean(formErrors.name)}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
             {formErrors.name ? (
-              <span className="field-error">{formErrors.name}</span>
+              <span className="field-error" role="alert">
+                {formErrors.name}
+              </span>
             ) : null}
           </div>
 
@@ -324,11 +399,14 @@ export function UsersPage() {
               id="uf-email"
               type="email"
               className={`input ${formErrors.email ? "has-error" : ""}`}
+              aria-invalid={Boolean(formErrors.email)}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             {formErrors.email ? (
-              <span className="field-error">{formErrors.email}</span>
+              <span className="field-error" role="alert">
+                {formErrors.email}
+              </span>
             ) : null}
           </div>
 
@@ -353,12 +431,15 @@ export function UsersPage() {
               id="uf-pass"
               type="password"
               className={`input ${formErrors.password ? "has-error" : ""}`}
+              aria-invalid={Boolean(formErrors.password)}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={editing ? "Manter senha atual" : "Mínimo 6 caracteres"}
             />
             {formErrors.password ? (
-              <span className="field-error">{formErrors.password}</span>
+              <span className="field-error" role="alert">
+                {formErrors.password}
+              </span>
             ) : null}
           </div>
         </form>

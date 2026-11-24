@@ -978,6 +978,15 @@ table.data-table tbody tr:hover td {
   background-color: #f9fbfc;
 }
 
+table.data-table tbody tr.row-inactive td {
+  background-color: var(--surface-tonal);
+  color: var(--ink-muted);
+}
+
+.badge-inactive {
+  border-style: dashed;
+}
+
 table.data-table th.td-numeric,
 .td-numeric {
   text-align: right;
