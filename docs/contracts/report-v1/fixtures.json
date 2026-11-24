@@ -1,0 +1,313 @@
+{
+  "ready": {
+    "path": "/api/reports/replenishment",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "ready",
+      "status_message": null,
+      "items": [
+        {
+          "model_run_id": "demo-run-001",
+          "model_version": "dqn-v1",
+          "scenario": "demo-poisson",
+          "source": "synthetic",
+          "reference_date": "2026-11-23",
+          "trained_at": "2026-11-23T18:00:00Z",
+          "generated_at": "2026-11-23T18:05:00Z",
+          "sku": "DEMO-001",
+          "product_name": "Produto de demonstração",
+          "warehouse": "1",
+          "recommended_quantity": "12.000",
+          "unit": "UN",
+          "policy": "dqn"
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "calculating": {
+    "path": "/api/reports/replenishment",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "calculating",
+      "status_message": "Cálculo em andamento.",
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "insufficient_data": {
+    "path": "/api/reports/replenishment",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "insufficient_data",
+      "status_message": "Dados insuficientes para calcular uma sugestão.",
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "stale": {
+    "path": "/api/reports/replenishment",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "stale",
+      "status_message": "Esta sugestão precisa ser atualizada.",
+      "items": [
+        {
+          "model_run_id": "demo-run-001",
+          "model_version": "dqn-v1",
+          "scenario": "demo-poisson",
+          "source": "synthetic",
+          "reference_date": "2026-11-23",
+          "trained_at": "2026-11-23T18:00:00Z",
+          "generated_at": "2026-11-23T18:05:00Z",
+          "sku": "DEMO-001",
+          "product_name": "Produto de demonstração",
+          "warehouse": "1",
+          "recommended_quantity": "12.000",
+          "unit": "UN",
+          "policy": "dqn"
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "empty": {
+    "path": "/api/reports/replenishment",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "empty",
+      "status_message": "Nenhuma sugestão no recorte selecionado.",
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "forbidden": {
+    "path": "/api/reports/replenishment",
+    "status_code": 403,
+    "body": {
+      "detail": "Acesso restrito a administradores."
+    }
+  },
+  "imported_history": {
+    "path": "/api/reports/imported-history",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "ready",
+      "status_message": null,
+      "items": [
+        {
+          "source": "firebird",
+          "batch_id": "demo-batch-001",
+          "source_date": "2025-07-31",
+          "sku": "DEMO-001",
+          "product_name": "Produto de demonstração",
+          "warehouse": "1",
+          "event_date": "2025-07-21",
+          "unit": "UN",
+          "stock_availability": "unknown",
+          "record_id": "demo-0001",
+          "event_type": "sale",
+          "quantity": "2.000",
+          "unit_cost": null
+        },
+        {
+          "source": "firebird",
+          "batch_id": "demo-batch-001",
+          "source_date": "2025-07-31",
+          "sku": "DEMO-001",
+          "product_name": "Produto de demonstração",
+          "warehouse": "1",
+          "event_date": "2025-07-21",
+          "unit": "UN",
+          "stock_availability": "unknown",
+          "record_id": "demo-0002",
+          "event_type": "receipt",
+          "quantity": "12.000",
+          "unit_cost": "3.54"
+        }
+      ],
+      "total": 2,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "comparison": {
+    "path": "/api/reports/comparison",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "ready",
+      "status_message": null,
+      "items": [
+        {
+          "model_run_id": "demo-run-001",
+          "model_version": "dqn-v1",
+          "scenario": "demo-poisson",
+          "source": "synthetic",
+          "reference_date": "2026-11-23",
+          "trained_at": "2026-11-23T18:00:00Z",
+          "generated_at": "2026-11-23T18:05:00Z",
+          "seed": 30001,
+          "stockout_days": 2,
+          "mean_inventory": "6.215",
+          "order_days": 11,
+          "policy": "base_stock",
+          "total_cost": "114.50",
+          "fill_rate": "0.964"
+        },
+        {
+          "model_run_id": "demo-run-001",
+          "model_version": "dqn-v1",
+          "scenario": "demo-poisson",
+          "source": "synthetic",
+          "reference_date": "2026-11-23",
+          "trained_at": "2026-11-23T18:00:00Z",
+          "generated_at": "2026-11-23T18:05:00Z",
+          "seed": 30001,
+          "stockout_days": 2,
+          "mean_inventory": "6.215",
+          "order_days": 11,
+          "policy": "dqn",
+          "total_cost": "117.40",
+          "fill_rate": "0.951"
+        },
+        {
+          "model_run_id": "demo-run-001",
+          "model_version": "dqn-v1",
+          "scenario": "demo-poisson",
+          "source": "synthetic",
+          "reference_date": "2026-11-23",
+          "trained_at": "2026-11-23T18:00:00Z",
+          "generated_at": "2026-11-23T18:05:00Z",
+          "seed": 30001,
+          "stockout_days": 2,
+          "mean_inventory": "6.215",
+          "order_days": 11,
+          "policy": "s_s",
+          "total_cost": "122.30",
+          "fill_rate": "0.922"
+        }
+      ],
+      "total": 3,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "inventory_exceptions": {
+    "path": "/api/reports/inventory-exceptions",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "ready",
+      "status_message": null,
+      "items": [
+        {
+          "source": "firebird",
+          "batch_id": "demo-batch-001",
+          "source_date": "2025-07-31",
+          "sku": "DEMO-001",
+          "warehouse": "1",
+          "reference_date": "2025-07-21",
+          "coverage": "unknown",
+          "reason": "Disponibilidade histórica desconhecida."
+        },
+        {
+          "source": "firebird",
+          "batch_id": "demo-batch-001",
+          "source_date": "2025-07-31",
+          "sku": "DEMO-001",
+          "warehouse": "1",
+          "reference_date": "2025-07-22",
+          "coverage": "stockout",
+          "reason": "Ruptura com evidência confirmada."
+        }
+      ],
+      "total": 2,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "import_quality": {
+    "path": "/api/ai/imports/legacy/batches",
+    "status_code": 200,
+    "body": {
+      "schema_version": 1,
+      "status": "ready",
+      "status_message": null,
+      "items": [
+        {
+          "source": "firebird",
+          "batch_id": "demo-batch-001",
+          "source_date": "2025-07-31",
+          "warehouse": "1",
+          "period_start": "2025-07-21",
+          "period_end": "2025-07-22",
+          "status": "imported",
+          "imported_at": "2026-11-23T12:00:00Z",
+          "accepted_rows": 2,
+          "rejected_rows": 1,
+          "duplicate_rows": 0,
+          "rejection_reasons": {
+            "invalid_unit": 1
+          },
+          "coverage": {
+            "available_days": 0,
+            "stockout_days": 1,
+            "unknown_days": 1,
+            "uncovered_days": 0
+          }
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "page_size": 25,
+      "total_pages": 1
+    }
+  },
+  "import_preview": {
+    "path": null,
+    "status_code": null,
+    "body": {
+      "schema_version": 1,
+      "status": "invalid",
+      "source": "firebird",
+      "warehouse": "1",
+      "source_date": "2025-07-31",
+      "total_rows": 3,
+      "valid_rows": 2,
+      "rejected_rows": 1,
+      "duplicate_rows": 0,
+      "diagnostics": [
+        {
+          "dataset": "receipts",
+          "line_number": 3,
+          "reason": "invalid_unit"
+        }
+      ]
+    }
+  }
+}
