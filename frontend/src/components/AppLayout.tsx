@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight,
@@ -11,26 +11,31 @@ import {
   Package,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { translateRole } from "../utils/format";
 import { BrandMark } from "./BrandMark";
 
-interface RouteMeta {
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
   group: string;
-  title: string;
+  adminOnly?: boolean;
+  end?: boolean;
 }
 
-const ROUTE_META: Record<string, RouteMeta> = {
-  "/": { group: "Visão Geral", title: "Painel de Estoque" },
-  "/produtos": { group: "Estoque", title: "Produtos e Saldos" },
-  "/movimentacoes": { group: "Estoque", title: "Movimentações" },
-  "/cadastros-auxiliares": { group: "Estoque", title: "Categorias e Fornecedores" },
-  "/relatorios": { group: "Relatórios", title: "Relatórios Gerenciais" },
-  "/sugestoes-compra": { group: "Relatórios", title: "Reposição" },
-  "/dados-ia": { group: "Relatórios", title: "Importação e Dados" },
-  "/usuarios": { group: "Administração", title: "Usuários e Permissões" },
-};
+// One list feeds the desktop capsule bar and the mobile drawer.
+const NAV_ITEMS: NavItem[] = [
+  { to: "/", label: "Painel", icon: BarChart3, group: "Visão Geral", end: true },
+  { to: "/produtos", label: "Produtos", icon: Package, group: "Estoque" },
+  { to: "/movimentacoes", label: "Movimentações", icon: ArrowLeftRight, group: "Estoque" },
+  { to: "/cadastros-auxiliares", label: "Categorias e Fornecedores", icon: FolderTree, group: "Estoque" },
+  { to: "/relatorios", label: "Relatórios", icon: FileSpreadsheet, group: "Relatórios", adminOnly: true },
+  { to: "/dados-ia", label: "Importação e Dados", icon: Database, group: "Relatórios", adminOnly: true },
+  { to: "/usuarios", label: "Usuários", icon: Users, group: "Administração", adminOnly: true },
+];
 
 function getInitials(name?: string): string {
   if (!name) return "EF";
@@ -49,11 +54,9 @@ export function AppLayout() {
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
-  const wasMobileOpenRef = useRef(false);
 
-  const currentMeta = useMemo<RouteMeta>(() => {
-    return ROUTE_META[location.pathname] ?? { group: "EstoqueFácil", title: "Operação" };
-  }, [location.pathname]);
+  const items = NAV_ITEMS.filter((item) => isAdmin || !item.adminOnly);
+  const groups = Array.from(new Set(items.map((item) => item.group)));
 
   const closeMobile = useCallback((restoreFocus = false) => {
     setMobileOpen(false);
@@ -71,43 +74,39 @@ export function AppLayout() {
 
   // Manage keyboard focus and Escape key for mobile drawer
   useEffect(() => {
-    if (mobileOpen) {
-      wasMobileOpenRef.current = true;
-      const frame = window.requestAnimationFrame(() => {
-        closeButtonRef.current?.focus();
-      });
-      const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key === "Escape") {
+    if (!mobileOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobile(true);
+        return;
+      }
+      if (event.key === "Tab" && sidebarRef.current) {
+        const focusables = Array.from(
+          sidebarRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
-          closeMobile(true);
-          return;
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
         }
-        if (event.key === "Tab" && sidebarRef.current) {
-          const focusables = Array.from(
-            sidebarRef.current.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            )
-          ).filter((el) => el.offsetParent !== null);
-          if (focusables.length === 0) return;
-          const first = focusables[0];
-          const last = focusables[focusables.length - 1];
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-      };
-      window.addEventListener("keydown", onKeyDown);
-      return () => {
-        window.cancelAnimationFrame(frame);
-        window.removeEventListener("keydown", onKeyDown);
-      };
-    } else if (wasMobileOpenRef.current) {
-      wasMobileOpenRef.current = false;
-    }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [mobileOpen, closeMobile]);
 
   const handleLogout = async () => {
@@ -115,11 +114,68 @@ export function AppLayout() {
     navigate("/login", { replace: true });
   };
 
+  const roleLabel = user ? translateRole(user.role) : "";
+
   return (
     <div className="app-shell">
       <a href="#main-content" className="skip-link">
         Pular para o conteúdo principal
       </a>
+
+      <header className="app-topbar">
+        <div className="topbar-brand">
+          <button
+            ref={menuTriggerRef}
+            type="button"
+            className="btn btn-secondary btn-icon mobile-menu-btn"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menu de navegação"
+            aria-expanded={mobileOpen}
+            aria-controls="primary-sidebar"
+          >
+            <Menu size={18} aria-hidden="true" />
+          </button>
+          <span className="brand-mark-wrap">
+            <BrandMark size={30} />
+          </span>
+          <div className="brand-text">
+            <span className="brand-name">EstoqueFácil</span>
+            <span className="brand-subtitle">Depósito Único</span>
+          </div>
+        </div>
+
+        <nav className="top-nav" aria-label="Navegação do sistema">
+          {items.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `top-nav-link ${isActive ? "active" : ""}`}
+            >
+              <Icon size={16} aria-hidden="true" />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="topbar-account">
+          <span className="user-avatar" title={user?.name} aria-hidden="true">
+            {getInitials(user?.name)}
+          </span>
+          <span className="sr-only">
+            {user?.name} · {roleLabel}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon topbar-logout"
+            onClick={handleLogout}
+            aria-label="Sair do sistema"
+            title="Sair do sistema"
+          >
+            <LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </header>
 
       <div
         className={`sidebar-backdrop ${mobileOpen ? "open" : ""}`}
@@ -127,6 +183,7 @@ export function AppLayout() {
         aria-hidden="true"
       />
 
+      {/* Drawer navigation for narrow screens; hidden on wide screens. */}
       <aside
         id="primary-sidebar"
         ref={sidebarRef}
@@ -154,83 +211,26 @@ export function AppLayout() {
           </button>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Navegação do sistema">
-          <div className="nav-group">
-            <div className="nav-section-label">Visão Geral</div>
-            <NavLink
-              to="/"
-              end
-              onClick={() => closeMobile(false)}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              <BarChart3 size={17} aria-hidden="true" />
-              <span>Painel</span>
-            </NavLink>
-          </div>
-
-          <div className="nav-group">
-            <div className="nav-section-label">Estoque</div>
-            <NavLink
-              to="/produtos"
-              onClick={() => closeMobile(false)}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              <Package size={17} aria-hidden="true" />
-              <span>Produtos</span>
-            </NavLink>
-            <NavLink
-              to="/movimentacoes"
-              onClick={() => closeMobile(false)}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              <ArrowLeftRight size={17} aria-hidden="true" />
-              <span>Movimentações</span>
-            </NavLink>
-            <NavLink
-              to="/cadastros-auxiliares"
-              onClick={() => closeMobile(false)}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              <FolderTree size={17} aria-hidden="true" />
-              <span>Categorias e Fornecedores</span>
-            </NavLink>
-          </div>
-
-          {isAdmin ? (
-            <>
-              <div className="nav-group">
-                <div className="nav-section-label">Relatórios</div>
-                <NavLink
-                  to="/relatorios"
-                  onClick={() => closeMobile(false)}
-                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-                >
-                  <FileSpreadsheet size={17} aria-hidden="true" />
-                  <span>Relatórios</span>
-                </NavLink>
-                <NavLink
-                  to="/dados-ia"
-                  onClick={() => closeMobile(false)}
-                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-                >
-                  <Database size={17} aria-hidden="true" />
-                  <span>Importação e Dados</span>
-                </NavLink>
-              </div>
-
-              <div className="nav-group">
-                <div className="nav-section-label">Administração</div>
-                <NavLink
-                  to="/usuarios"
-                  onClick={() => closeMobile(false)}
-                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-                >
-                  <Users size={17} aria-hidden="true" />
-                  <span>Usuários</span>
-                </NavLink>
-              </div>
-            </>
-          ) : null}
+        <nav className="sidebar-nav" aria-label="Navegação do sistema (menu)">
+          {groups.map((group) => (
+            <div className="nav-group" key={group}>
+              <div className="nav-section-label">{group}</div>
+              {items
+                .filter((item) => item.group === group)
+                .map(({ to, label, icon: Icon, end }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    onClick={() => closeMobile(false)}
+                    className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                  >
+                    <Icon size={17} aria-hidden="true" />
+                    <span>{label}</span>
+                  </NavLink>
+                ))}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -240,12 +240,12 @@ export function AppLayout() {
             </span>
             <div className="user-pill">
               <strong>{user?.name}</strong>
-              <span>{user ? translateRole(user.role) : ""}</span>
+              <span>{roleLabel}</span>
             </div>
           </div>
           <button
             type="button"
-            className="btn btn-secondary btn-sm sidebar-logout-btn"
+            className="btn btn-secondary sidebar-logout-btn"
             onClick={handleLogout}
           >
             <LogOut size={15} aria-hidden="true" />
@@ -254,44 +254,9 @@ export function AppLayout() {
         </div>
       </aside>
 
-      <div className="main-area">
-        <header className="app-topbar">
-          <div className="topbar-left">
-            <button
-              ref={menuTriggerRef}
-              type="button"
-              className="btn btn-secondary btn-sm mobile-menu-btn"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Abrir menu de navegação"
-              aria-expanded={mobileOpen}
-              aria-controls="primary-sidebar"
-            >
-              <Menu size={17} aria-hidden="true" />
-              <span>Menu</span>
-            </button>
-            <div className="topbar-breadcrumb" aria-label="Localização atual">
-              <span className="topbar-group">{currentMeta.group}</span>
-              <span className="topbar-sep" aria-hidden="true">
-                /
-              </span>
-              <span className="topbar-section">{currentMeta.title}</span>
-            </div>
-          </div>
-
-          <div className="topbar-right">
-            <span className="topbar-context-pill">Depósito Único</span>
-            {user ? (
-              <span className="badge badge-neutral">
-                {translateRole(user.role)}
-              </span>
-            ) : null}
-          </div>
-        </header>
-
-        <main id="main-content" className="page-content" tabIndex={-1}>
-          <Outlet />
-        </main>
-      </div>
+      <main id="main-content" className="app-sheet page-content" tabIndex={-1}>
+        <Outlet />
+      </main>
     </div>
   );
 }

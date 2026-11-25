@@ -128,50 +128,52 @@ export function ReplenishmentTabPanel() {
   const hasVisibleSuggestions = displayedItems.length > 0;
   const primaryRow = displayedItems[0] ?? null;
 
-  return (
-    <div className="replenishment-panel" data-testid="replenishment-panel">
-      <div className="filters-bar">
-        <div className="form-field" style={{ flex: "1 1 200px" }}>
-          <label htmlFor="rep-repl-sku">SKU</label>
-          <input
-            id="rep-repl-sku"
-            type="search"
-            className="input"
-            value={filters.sku}
-            onChange={(e) => {
-              setFilters((prev) => ({ ...prev, sku: e.target.value }));
-              setPage(1);
-            }}
-            placeholder="Filtrar por SKU..."
-          />
-        </div>
-        <div className="form-field" style={{ minWidth: 150 }}>
-          <label htmlFor="rep-repl-wh">Depósito</label>
-          <input
-            id="rep-repl-wh"
-            type="text"
-            className="input"
-            value={filters.warehouse}
-            onChange={(e) => {
-              setFilters((prev) => ({ ...prev, warehouse: e.target.value }));
-              setPage(1);
-            }}
-            placeholder="Ex: 1"
-          />
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => {
-            setFilters(DEFAULT_FILTERS);
+  const filtersBar = (
+    <div className="filters-bar" role="search" aria-label="Filtrar sugestões de reposição">
+      <div className="form-field" style={{ flex: "1 1 200px" }}>
+        <label htmlFor="rep-repl-sku">SKU</label>
+        <input
+          id="rep-repl-sku"
+          type="search"
+          className="input"
+          value={filters.sku}
+          onChange={(e) => {
+            setFilters((prev) => ({ ...prev, sku: e.target.value }));
             setPage(1);
           }}
-        >
-          <RotateCcw size={14} aria-hidden="true" />
-          <span>Limpar filtros</span>
-        </button>
+          placeholder="Ex.: DEMO-MOUSE-01"
+        />
       </div>
+      <div className="form-field" style={{ minWidth: 150 }}>
+        <label htmlFor="rep-repl-wh">Depósito</label>
+        <input
+          id="rep-repl-wh"
+          type="text"
+          className="input"
+          value={filters.warehouse}
+          onChange={(e) => {
+            setFilters((prev) => ({ ...prev, warehouse: e.target.value }));
+            setPage(1);
+          }}
+          placeholder="Ex.: 1"
+        />
+      </div>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => {
+          setFilters(DEFAULT_FILTERS);
+          setPage(1);
+        }}
+      >
+        <RotateCcw size={14} aria-hidden="true" />
+        <span>Limpar filtros</span>
+      </button>
+    </div>
+  );
 
+  return (
+    <div className="replenishment-panel" data-testid="replenishment-panel">
       {error ? (
         <div className="alert alert-error" role="alert">
           {error}
@@ -199,6 +201,54 @@ export function ReplenishmentTabPanel() {
         </div>
       ) : null}
 
+      {hasVisibleSuggestions && primaryRow ? (
+        <section
+          className="recommendation"
+          aria-labelledby="rec-title"
+          data-testid="replenishment-provenance"
+        >
+          <div className="recommendation-main">
+            <h2 id="rec-title" className="recommendation-label">
+              Recomendação de compra
+            </h2>
+            <div className="recommendation-qty">
+              <strong className="tabular-nums">
+                {formatQuantity(primaryRow.recommended_quantity, primaryRow.unit)} {primaryRow.unit}
+              </strong>
+              <span className="ai-disclosure-text">Sugestão gerada por IA</span>
+            </div>
+            <p className="recommendation-product">
+              <strong>{primaryRow.product_name}</strong> ·{" "}
+              <span className="mono">{primaryRow.sku}</span> · Depósito {primaryRow.warehouse}
+            </p>
+          </div>
+          <dl className="recommendation-facts">
+            <div>
+              <dt>Origem</dt>
+              <dd>
+                <span className="origin-label">{formatModelOrigin(primaryRow.source)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Data de referência</dt>
+              <dd>{formatDateBR(primaryRow.reference_date)}</dd>
+            </div>
+            <div>
+              <dt>Gerada em</dt>
+              <dd>{formatDateTimeBR(primaryRow.generated_at)}</dd>
+            </div>
+            <div>
+              <dt>Modelo e cenário</dt>
+              <dd className="mono">
+                {primaryRow.model_version} · {primaryRow.scenario}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
+
+      {filtersBar}
+
       {loading && !hasVisibleSuggestions ? (
         <div className="state-box">Carregando recomendações de reposição...</div>
       ) : !hasVisibleSuggestions ? (
@@ -215,23 +265,6 @@ export function ReplenishmentTabPanel() {
         </div>
       ) : (
         <>
-          {primaryRow ? (
-            <div className="provenance-bar tabular-nums" data-testid="replenishment-provenance">
-              <span>
-                Origem: <strong>{formatModelOrigin(primaryRow.source)}</strong>
-              </span>
-              <span>
-                Referência: <strong>{formatDateBR(primaryRow.reference_date)}</strong>
-              </span>
-              <span>
-                Gerada em: <strong>{formatDateTimeBR(primaryRow.generated_at)}</strong>
-              </span>
-              <span className="mono">
-                {primaryRow.model_version} · {primaryRow.scenario}
-              </span>
-            </div>
-          ) : null}
-
           <div className="table-scroll-hint" aria-hidden="true">
             Deslize horizontalmente ou use as setas do teclado na tabela para ver todas as colunas.
           </div>
@@ -244,33 +277,32 @@ export function ReplenishmentTabPanel() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>SKU / Produto</th>
-                  <th>Depósito</th>
+                  <th>Produto</th>
                   <th className="td-numeric">Quantidade sugerida</th>
-                  <th>Origem e atualização</th>
+                  <th>Origem</th>
                   <th>Data de referência</th>
+                  <th>Depósito</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedItems.map((row) => (
                   <tr key={`${row.model_run_id}-${row.sku}-${row.warehouse}`}>
                     <td>
-                      <div className="mono">{row.sku}</div>
                       <strong>{row.product_name}</strong>
+                      <div className="cell-subtext mono">{row.sku}</div>
                     </td>
-                    <td className="mono">{row.warehouse}</td>
-                    <td className="td-numeric">
+                    <td className="td-numeric qty-col">
                       <div className="suggestion-qty-cell">
                         <strong>
                           {formatQuantity(row.recommended_quantity, row.unit)} {row.unit}
                         </strong>
-                        <span className="ai-disclosure-text">
-                          Sugestão gerada por IA
-                        </span>
+                        <span className="ai-disclosure-text">Sugestão gerada por IA</span>
                       </div>
                     </td>
                     <td>
-                      <div>{formatModelOrigin(row.source)}</div>
+                      <div>
+                        <strong>{formatModelOrigin(row.source)}</strong>
+                      </div>
                       <div className="cell-subtext tabular-nums">
                         Atualizada em {formatDateTimeBR(row.generated_at)} ·{" "}
                         <span className="mono">{row.model_version}</span>
@@ -280,6 +312,7 @@ export function ReplenishmentTabPanel() {
                       <div>{formatDateBR(row.reference_date)}</div>
                       <div className="cell-subtext mono">{row.scenario}</div>
                     </td>
+                    <td className="mono">{row.warehouse}</td>
                   </tr>
                 ))}
               </tbody>
@@ -287,7 +320,7 @@ export function ReplenishmentTabPanel() {
           </div>
 
           <p className="report-footnote">
-            As quantidades acima servem apenas como apoio à decisão de compra. Nenhum pedido é emitido automaticamente.
+            As quantidades servem como apoio à decisão de compra. Nenhum pedido é emitido automaticamente.
           </p>
 
           <Pagination
