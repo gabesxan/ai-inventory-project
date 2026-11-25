@@ -17,11 +17,11 @@ Sistema de gestão de estoque com movimentações transacionais e uma camada ana
 
 ## O projeto
 
-O **EstoqueFácil IA** organiza produtos, fornecedores e movimentações de uma pequena empresa com um único depósito. O objetivo é manter o saldo coerente, preservar o histórico e disponibilizar dados úteis para uma futura etapa de previsão de demanda.
+O **EstoqueFácil IA** organiza produtos, fornecedores e movimentações de uma pequena empresa com um único depósito. Mantém o saldo e o histórico de estoque e usa uma Deep Q-Network (DQN) para sugerir quantidades de reposição.
 
 O projeto combina **React + TypeScript** no frontend com **FastAPI + PostgreSQL** no backend. A interface usa português brasileiro, valores em reais e datas no formato brasileiro.
 
-**Estado da v1:** gestão operacional implementada, exportações analíticas e contrato de previsão disponíveis. **Não há modelo de machine learning treinado ou validado nesta versão.** A simulação opcional de compra usa média móvel demonstrativa e é identificada como tal.
+O DQN foi treinado e avaliado em simulação. O worker grava suas recomendações no PostgreSQL, e a interface as exibe em **Relatórios → Reposição** com a origem do modelo. A avaliação com dados operacionais reais ainda está pendente. [Documentação técnica da IA e do banco](docs/AI_TECHNICAL_ARCHITECTURE.md)
 
 ## O que está implementado
 
@@ -32,9 +32,10 @@ O projeto combina **React + TypeScript** no frontend com **FastAPI + PostgreSQL*
 | Movimentação        | Entradas, saídas, ajustes e estornos vinculados, com regras e histórico.                                                |
 | Consistência        | Bloqueio transacional por produto e restrições no PostgreSQL para impedir saldo negativo.                               |
 | Painel              | Indicadores reais, itens abaixo do mínimo e evolução de movimentações com unidades separadas.                           |
-| Relatórios          | Estoque atual, abaixo do mínimo e movimentações, com filtros e exportação CSV.                                          |
+| Relatórios          | Estoque, movimentações, histórico importado, exceções, sugestões de reposição e comparação de políticas.                |
 | Histórico de estudo | Importação CSV com prévia, erros por linha e deduplicação, sem alterar o estoque operacional.                           |
-| Camada analítica    | Séries diárias, períodos de ruptura, demanda separada de perdas e contrato para um futuro provedor de previsão.         |
+| Camada analítica    | Séries diárias, períodos de ruptura, demanda separada de perdas e cobertura do histórico importado do Firebird.         |
+| Reposição com IA    | DQN em CPU, execução em worker separado, resultados persistidos e comparação com base-stock e (s, S).                  |
 
 ## Como o estoque é atualizado
 
@@ -69,20 +70,20 @@ flowchart LR
     API["FastAPI + Pydantic<br/>JWT · perfis · validação"]
     SVC["Serviços de domínio<br/>Unidades · saldo · transações"]
     DB[("PostgreSQL 16<br/>SQLAlchemy + Alembic")]
-    DATA["Camada analítica<br/>CSV · pandas · séries diárias"]
-    FUTURE["DemandForecastProvider<br/>Integração futura"]
+    FB[("Firebird legado")]
+    IMPORT["Importação reconciliada<br/>Eventos · cobertura · lotes"]
+    WORKER["Worker de reposição<br/>Simulador · DQN em CPU"]
     UI --> API --> SVC --> DB
-    API --> DATA
-    DB --> DATA
-    DATA -. "contrato definido" .-> FUTURE
+    FB --> IMPORT --> DB
+    DB -->|"Saldo e histórico elegível"| WORKER
+    WORKER -->|"Execuções, sugestões e estados"| DB
+    DB -->|"Resultados persistidos"| API
     classDef app fill:#EFF6FF,stroke:#2563EB,color:#172554,stroke-width:2px;
     classDef core fill:#111827,stroke:#111827,color:#FFFFFF,stroke-width:2px;
     classDef data fill:#F0FDFA,stroke:#0D9488,color:#134E4A;
-    classDef future fill:#FFFFFF,stroke:#94A3B8,color:#475569,stroke-dasharray:5 4;
     class UI,API app;
-    class SVC core;
-    class DB,DATA data;
-    class FUTURE future;
+    class SVC,WORKER core;
+    class FB,IMPORT,DB data;
 ```
 
 | Camada       | Tecnologias                                                     |
@@ -91,7 +92,7 @@ flowchart LR
 | API          | Python, FastAPI, Pydantic e Uvicorn.                            |
 | Dados        | PostgreSQL 16, SQLAlchemy 2, psycopg 3 e Alembic.               |
 | Autenticação | bcrypt, PyJWT e tabela de revogação de tokens.                  |
-| Análise      | pandas; contrato de integração preparado para modelos futuros.  |
+| IA e análise | PyTorch em CPU, NumPy, pandas e um simulador diário de estoque. |
 | Testes       | pytest, HTTPX/TestClient e PostgreSQL real.                     |
 
 ```text
@@ -104,7 +105,7 @@ flowchart LR
 │   │   ├── schemas/      # Contratos Pydantic
 │   │   ├── ai/           # Importação, séries, provedores e reposição
 │   │   └── cli.py        # Criação de administrador e demonstração
-│   ├── alembic/          # Migration inicial
+│   ├── alembic/          # Migrações PostgreSQL
 │   └── tests/            # Integração, permissões e concorrência
 ├── frontend/
 │   └── src/              # Páginas, componentes, API e estilos
@@ -227,41 +228,15 @@ O proxy `/api` do Vite encaminha o desenvolvimento para `127.0.0.1:8000`. No bui
 6. Entre como operador e confira as restrições administrativas.
 7. Exporte um relatório filtrado.
 8. Em **Dados para IA**, baixe o modelo CSV, envie um histórico, revise a prévia e confirme. Confira que o saldo operacional não mudou.
-9. Consulte a série diária e a tela de sugestões, distinguindo ausência de modelo da simulação demonstrativa.
+9. Execute o [roteiro do worker](docs/LOCAL_DELIVERY.md#reprodução-local) na base de demonstração e abra **Relatórios → Reposição**. Confira a quantidade, a origem **Simulação acadêmica** e a comparação entre políticas.
 
-## O que IA significa nesta v1
+## IA de reposição e banco de dados
 
-O projeto prepara dados e contratos para uma etapa futura. Não apresenta treinamento ou qualidade preditiva já comprovados.
+O DQN recebe o saldo atual e a fila de recebimentos e escolhe uma quantidade inteira de compra. O worker grava a execução, a recomendação e o estado do SKU no PostgreSQL. A decisão de compra permanece com o usuário.
 
-| Componente                                   | Estado                                        |
-| -------------------------------------------- | --------------------------------------------- |
-| Histórico operacional                        | Disponível.                                   |
-| Histórico CSV separado                       | Disponível, com prévia e deduplicação.        |
-| Série diária por produto                     | Disponível para análise em pandas.            |
-| Demanda e perdas separadas                   | Disponível.                                   |
-| Identificação de rupturas e dados sintéticos | Disponível.                                   |
-| `DemandForecastProvider`                     | Contrato implementado para integração futura. |
-| Média móvel                                  | Simulação opcional, sem validação preditiva.  |
-| Modelo de ML treinado                        | Não incluído.                                 |
-| Pedidos de compra automáticos                | Não incluídos.                                |
-
-### Reposição sem dupla contagem
-
-A regra utiliza `W = max(horizonte, prazo de reposição)` e calcula:
-
-```text
-compra sugerida = max(
-  0,
-  demanda estimada na janela W + estoque de segurança
-  - saldo atual - pedidos de compra em aberto
-)
-```
-
-Na v1, pedidos em aberto são considerados zero. Quantidades discretas são arredondadas para cima em unidades inteiras; contínuas, em três casas decimais. A sugestão não gera uma compra automaticamente.
-
-Dados sintéticos validam o fluxo técnico, não a qualidade de um modelo. A documentação descreve uma proposta futura de avaliação temporal com baseline, tratamento de ruptura e prevenção de vazamento de informação.
-
-[Dicionário de dados, contrato e avaliação](docs/AI_INTEGRATION_AND_EVALUATION.md)
+- [Arquitetura técnica, treinamento, avaliação e diagrama do banco](docs/AI_TECHNICAL_ARCHITECTURE.md)
+- [Roteiro local e evidências de integração](docs/LOCAL_DELIVERY.md)
+- [Dicionário das exportações analíticas e contrato de previsão da v1](docs/AI_INTEGRATION_AND_EVALUATION.md)
 
 ## Acesso e segurança
 
@@ -328,7 +303,7 @@ As rotas protegidas recebem `Authorization: Bearer <token>`. Os schemas e os par
 ## Limitações e próximos passos
 
 - Uma empresa e um depósito; sem PDV, emissão fiscal, pagamentos ou gestão de pedidos de compra.
-- Não há modelo treinado ou acurácia de previsão comprovada.
+- O DQN atende SKUs em unidades inteiras (`UN`). As métricas publicadas medem reposição no simulador. O recorte real legado ainda carece de evidência suficiente para calibração.
 - Valor estimado do estoque é uma referência gerencial, sem método contábil de avaliação.
 - O frontend mantém JWT no armazenamento acessível a JavaScript; migrar e endurecer a gestão da sessão é uma evolução de segurança.
 - Rate limiting, política de produção, backups e observabilidade ainda precisam de implementação ou validação.
@@ -337,7 +312,7 @@ As rotas protegidas recebem `Authorization: Bearer <token>`. Os schemas e os par
 - O Compose disponibiliza o PostgreSQL. API, interface, proxy e HTTPS de produção precisam de configuração própria.
 - Esta publicação contém código para execução local; não representa um serviço de produção hospedado.
 
-Próximas etapas recomendadas: hardening de autenticação, testes de navegador, lock de dependências Python, CI e avaliação do futuro modelo com histórico real.
+Próximas etapas incluem endurecer a autenticação, fixar as dependências Python, configurar CI e avaliar a reposição calibrada com histórico real elegível.
 
 ---
 
